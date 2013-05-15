@@ -45,6 +45,7 @@
 #include <linux/usb.h>
 #include <linux/input/mt.h>
 #include <linux/string.h>
+#include "compat.h"
 
 
 MODULE_AUTHOR("Stephane Chatty <chatty@enac.fr>");

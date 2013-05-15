@@ -1,6 +1,7 @@
 MODULE_NAME := hid-multitouch
 
 hid_mt_compat-y		:= $(MODULE_NAME).o
+hid_mt_compat-y		+= compat.o
 
 obj-m			+= hid_mt_compat.o
 
