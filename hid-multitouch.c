@@ -1376,7 +1376,7 @@ static const struct hid_usage_id mt_grabbed_usages[] = {
 };
 
 static struct hid_driver mt_driver = {
-	.name = "hid-multitouch",
+	.name = "hid-mt-compat",
 	.id_table = mt_devices,
 	.probe = mt_probe,
 	.remove = mt_remove,

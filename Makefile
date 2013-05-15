@@ -1,6 +1,8 @@
 MODULE_NAME := hid-multitouch
 
-obj-m += $(MODULE_NAME).o
+hid_mt_compat-y		:= $(MODULE_NAME).o
+
+obj-m			+= hid_mt_compat.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
