@@ -115,10 +115,18 @@ struct mt_device {
 	bool serial_maybe;	/* need to check for serial protocol */
 	bool curvalid;		/* is the current contact valid? */
 	unsigned mt_flags;	/* flags to pass to input-mt */
+
+	/** compat */
+	unsigned last_touch_report_offset;
+	unsigned last_pen_report_offset;
+	/** end of compat */
 };
 
 static void mt_post_parse_default_settings(struct mt_device *td);
 static void mt_post_parse(struct mt_device *td);
+/** compat */
+static void mt_report(struct hid_device *hid, struct hid_report *report);
+/** end of compat */
 
 /* classes of device behavior */
 #define MT_CLS_DEFAULT				0x0001
@@ -378,6 +386,17 @@ static void mt_store_field(struct hid_usage *usage, struct mt_device *td,
 	f->usages[f->length++] = usage->hid;
 }
 
+/**
+ * compat:
+ * - compute the actual usage bit offset in the report.
+ */
+static unsigned mt_report_offset(struct hid_field *field,
+		struct hid_usage *usage)
+{
+	return field->report_offset + field->report_size * usage->usage_index;
+}
+/** end of compat */
+
 static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
 		unsigned long **bit, int *max)
@@ -385,6 +404,14 @@ static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	struct mt_device *td = hid_get_drvdata(hdev);
 
 	td->pen_report_id = field->report->id;
+
+	/**
+	 * compat:
+	 * - retrieve the last report_offset to know when we are at the end of
+	 *   the report. This is required because hid-core drops constant items.
+	 */
+	td->last_pen_report_offset = mt_report_offset(field, usage);
+	/** end of compat */
 
 	return 0;
 }
@@ -435,6 +462,14 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 
 	if (field->application == HID_DG_TOUCHSCREEN)
 		td->mt_flags |= INPUT_MT_DIRECT;
+
+	/**
+	 * compat:
+	 * - retrieve the last report_offset to know when we are at the end of
+	 *   the report. This is required because hid-core drops constant items.
+	 */
+	td->last_touch_report_offset = mt_report_offset(field, usage);
+	/** end of compat */
 
 	/*
 	 * Model touchscreens providing buttons as touchpads.
@@ -790,6 +825,16 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 
 	input_mt_init_slots(input, td->maxcontacts, td->mt_flags);
 
+	/**
+	 * compat:
+	 * - remove fuzz for emulated ABS_X/Y
+	 */
+	if (input->absinfo && test_bit(ABS_X, input->absbit)) {
+		input->absinfo[ABS_X].fuzz = 0;
+		input->absinfo[ABS_Y].fuzz = 0;
+	}
+	/** end of compat */
+
 	td->mt_flags = 0;
 }
 
@@ -825,15 +870,36 @@ static int mt_event(struct hid_device *hid, struct hid_field *field,
 				struct hid_usage *usage, __s32 value)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
+	int ret = 1; /* ignore reports by default */
+	unsigned last_report_offset = 0;
 
 	if (field->report->id == td->mt_report_id)
-		return mt_touch_event(hid, field, usage, value);
+		ret = mt_touch_event(hid, field, usage, value);
 
-	if (field->report->id == td->pen_report_id)
-		return mt_pen_event(hid, field, usage, value);
+	else if (field->report->id == td->pen_report_id)
+		ret = mt_pen_event(hid, field, usage, value);
 
-	/* ignore other reports */
-	return 1;
+	/**
+	 * compat:
+	 * - store the field value to emulate .report()
+	 * - when accessing the last field, call mt_report()
+	 */
+	field->value[usage->usage_index] = value;
+
+	if (field->report->id == td->mt_report_id)
+		last_report_offset = td->last_touch_report_offset;
+	else if (field->report->id == td->pen_report_id)
+		last_report_offset = td->last_pen_report_offset;
+
+	if ((last_report_offset > 0) &&
+	    (usage->usage_index + 1 == field->report_count) &&
+	    (mt_report_offset(field, usage) == last_report_offset)) {
+		/* we are on the last field of the incoming report. */
+		mt_report(hid, field->report);
+	}
+	/** end of compat */
+
+	return ret;
 }
 
 static void mt_report(struct hid_device *hid, struct hid_report *report)
@@ -1387,7 +1453,6 @@ static struct hid_driver mt_driver = {
 	.feature_mapping = mt_feature_mapping,
 	.usage_table = mt_grabbed_usages,
 	.event = mt_event,
-	.report = mt_report,
 #ifdef CONFIG_PM
 	.reset_resume = mt_reset_resume,
 	.resume = mt_resume,
