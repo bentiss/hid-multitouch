@@ -117,8 +117,14 @@ struct mt_device {
 	unsigned mt_flags;	/* flags to pass to input-mt */
 
 	/** compat */
+	/* .report() emulation */
 	unsigned last_touch_report_offset;
 	unsigned last_pen_report_offset;
+	/* .usage_index emulation */
+	int prev_touch_report_offset;
+	unsigned touch_usage_index;
+	int prev_pen_report_offset;
+	unsigned pen_usage_index;
 	/** end of compat */
 };
 
@@ -391,9 +397,40 @@ static void mt_store_field(struct hid_usage *usage, struct mt_device *td,
  * - compute the actual usage bit offset in the report.
  */
 static unsigned mt_report_offset(struct hid_field *field,
-		struct hid_usage *usage)
+		unsigned usage_index)
 {
-	return field->report_offset + field->report_size * usage->usage_index;
+	return field->report_offset + field->report_size * usage_index;
+}
+/** end of compat */
+
+/**
+ * compat:
+ * - compute the usage_index of an usage in a field.
+ *
+ * @return the usage_index
+ */
+static unsigned mt_incr_usage_index(struct mt_device *td,
+		struct hid_field *field, int is_pen)
+{
+	int *prev_report_offset;
+	unsigned *usage_index;
+
+	if (is_pen) {
+		prev_report_offset = &td->prev_pen_report_offset;
+		usage_index = &td->pen_usage_index;
+	} else {
+		prev_report_offset = &td->prev_touch_report_offset;
+		usage_index = &td->touch_usage_index;
+	}
+
+	if (*prev_report_offset == field->report_offset)
+		*usage_index = *usage_index + 1;
+	else
+		*usage_index = 0;
+
+	*prev_report_offset = field->report_offset;
+
+	return *usage_index;
 }
 /** end of compat */
 
@@ -410,7 +447,8 @@ static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	 * - retrieve the last report_offset to know when we are at the end of
 	 *   the report. This is required because hid-core drops constant items.
 	 */
-	td->last_pen_report_offset = mt_report_offset(field, usage);
+	td->last_pen_report_offset = mt_report_offset(field,
+			mt_incr_usage_index(td, field, 1));
 	/** end of compat */
 
 	return 0;
@@ -468,7 +506,8 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	 * - retrieve the last report_offset to know when we are at the end of
 	 *   the report. This is required because hid-core drops constant items.
 	 */
-	td->last_touch_report_offset = mt_report_offset(field, usage);
+	td->last_touch_report_offset = mt_report_offset(field,
+			mt_incr_usage_index(td, field, 0));
 	/** end of compat */
 
 	/*
@@ -478,8 +517,8 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	    (usage->hid & HID_USAGE_PAGE) == HID_UP_BUTTON)
 		td->mt_flags |= INPUT_MT_POINTER;
 
-	if (usage->usage_index)
-		prev_usage = &field->usage[usage->usage_index - 1];
+	if (td->touch_usage_index)
+		prev_usage = &field->usage[td->touch_usage_index - 1];
 
 	switch (usage->hid & HID_USAGE_PAGE) {
 
@@ -570,7 +609,7 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 			return 1;
 		case HID_DG_CONTACTCOUNT:
 			td->cc_index = field->index;
-			td->cc_value_index = usage->usage_index;
+			td->cc_value_index = td->touch_usage_index;
 			return 1;
 		case HID_DG_CONTACTMAX:
 			/* we don't set td->last_slot_field as contactcount and
@@ -760,7 +799,7 @@ static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
 			return;
 		}
 
-		if (usage->usage_index + 1 == field->report_count) {
+		if (td->touch_usage_index + 1 == field->report_count) {
 			/* we only take into account the last report. */
 			if (usage->hid == td->last_slot_field)
 				mt_complete_slot(td, field->hidinput->input);
@@ -794,9 +833,16 @@ static void mt_touch_report(struct hid_device *hid, struct hid_report *report)
 		if (!(HID_MAIN_ITEM_VARIABLE & field->flags))
 			continue;
 
-		for (n = 0; n < count; n++)
+		for (n = 0; n < count; n++) {
+			/**
+			 * compat:
+			 * - emulate usage_index
+			 */
+			td->touch_usage_index = n;
+			/** end of compat */
 			mt_process_mt_event(hid, field, &field->usage[n],
 					field->value[n]);
+		}
 	}
 
 	if (td->num_received >= td->num_expected)
@@ -872,6 +918,7 @@ static int mt_event(struct hid_device *hid, struct hid_field *field,
 	struct mt_device *td = hid_get_drvdata(hid);
 	int ret = 1; /* ignore reports by default */
 	unsigned last_report_offset = 0;
+	unsigned usage_index = 0;
 
 	if (field->report->id == td->mt_report_id)
 		ret = mt_touch_event(hid, field, usage, value);
@@ -881,19 +928,23 @@ static int mt_event(struct hid_device *hid, struct hid_field *field,
 
 	/**
 	 * compat:
+	 * - compute the usage_index
 	 * - store the field value to emulate .report()
 	 * - when accessing the last field, call mt_report()
 	 */
-	field->value[usage->usage_index] = value;
-
-	if (field->report->id == td->mt_report_id)
+	if (field->report->id == td->mt_report_id) {
 		last_report_offset = td->last_touch_report_offset;
-	else if (field->report->id == td->pen_report_id)
+		usage_index = mt_incr_usage_index(td, field, 0);
+	} else if (field->report->id == td->pen_report_id) {
 		last_report_offset = td->last_pen_report_offset;
+		usage_index = mt_incr_usage_index(td, field, 1);
+	}
+
+	field->value[usage_index] = value;
 
 	if ((last_report_offset > 0) &&
-	    (usage->usage_index + 1 == field->report_count) &&
-	    (mt_report_offset(field, usage) == last_report_offset)) {
+	    (usage_index + 1 == field->report_count) &&
+	    (mt_report_offset(field, usage_index) == last_report_offset)) {
 		/* we are on the last field of the incoming report. */
 		mt_report(hid, field->report);
 	}
@@ -1042,6 +1093,10 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	td->cc_index = -1;
 	td->mt_report_id = -1;
 	td->pen_report_id = -1;
+	/** compat */
+	td->prev_touch_report_offset = -1;
+	td->prev_pen_report_offset = -1;
+	/** end of compat */
 	hid_set_drvdata(hdev, td);
 
 	td->fields = kzalloc(sizeof(struct mt_fields), GFP_KERNEL);
