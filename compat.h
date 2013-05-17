@@ -1,7 +1,7 @@
 #ifndef _COMPAT_H
 #define _COMPAT_H
 
-#include <linux/input/mt.h>
+#include "compat-mt.h"
 
 #ifndef HID_QUIRK_NO_EMPTY_INPUT
 #define HID_QUIRK_NO_EMPTY_INPUT		0x00000100
@@ -68,13 +68,5 @@ int __compat_hid_hw_idle(struct hid_device *hdev, int report, int idle,
 	module_driver(__hid_driver, hid_register_driver, \
 		      hid_unregister_driver)
 #endif /* module_hid_driver */
-
-#ifndef input_mt_is_used
-static inline bool input_mt_is_used(const struct input_mt *mt,
-				    const struct input_mt_slot *slot)
-{
-	return slot->frame == mt->frame;
-}
-#endif /* input_mt_is_used */
 
 #endif
