@@ -4,6 +4,19 @@
 #include "compat-mt.h"
 #include <linux/hid.h>
 
+#ifndef HID_GROUP_MULTITOUCH
+#define HID_GROUP_MULTITOUCH 0
+#undef HID_DEVICE
+#undef HID_USB_DEVICE
+#undef HID_BLUETOOTH_DEVICE
+#define HID_DEVICE(b, g, ven, prod)					\
+	.bus = (b), .vendor = (ven), .product = (prod)
+#define HID_USB_DEVICE(ven, prod)				\
+	.bus = BUS_USB, .vendor = (ven), .product = (prod)
+#define HID_BLUETOOTH_DEVICE(ven, prod)					\
+	.bus = BUS_BLUETOOTH, .vendor = (ven), .product = (prod)
+#endif /* HID_GROUP_MULTITOUCH */
+
 /**
  * struct __compat_hid_driver
  * @name: driver name (e.g. "Footech_bar-wheel")

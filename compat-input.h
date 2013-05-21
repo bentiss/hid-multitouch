@@ -15,6 +15,11 @@
 #include <linux/input.h>
 #include <linux/version.h>
 
+#ifndef ABS_MT_TOOL_X
+#define ABS_MT_TOOL_X		0x3c	/* Center X tool position */
+#define ABS_MT_TOOL_Y		0x3d	/* Center Y tool position */
+#endif
+
 /**
  * forward declaration of input_mt.
  */

@@ -1468,7 +1468,9 @@ static const struct hid_device_id mt_devices[] = {
 			USB_DEVICE_ID_ZYTRONIC_ZXY100) },
 
 	/* Generic MT device */
+#ifdef HID_BUS_ANY
 	{ HID_DEVICE(HID_BUS_ANY, HID_GROUP_MULTITOUCH, HID_ANY_ID, HID_ANY_ID) },
+#endif /* HID_BUS_ANY */
 	{ }
 };
 MODULE_DEVICE_TABLE(hid, mt_devices);
