@@ -41,9 +41,13 @@ int input_mt_init_slots(struct input_dev *dev, unsigned int num_slots,
 
 static void copy_abs(struct input_dev *dev, unsigned int dst, unsigned int src)
 {
-	if (dev->absinfo && test_bit(src, dev->absbit)) {
-		dev->absinfo[dst] = dev->absinfo[src];
-		dev->absinfo[dst].fuzz = 0;
+	if (test_bit(src, dev->absbit)) {
+		input_abs_set_val(dev, dst, input_abs_get_val(dev, src));
+		input_abs_set_min(dev, dst, input_abs_get_min(dev, src));
+		input_abs_set_max(dev, dst, input_abs_get_max(dev, src));
+		input_abs_set_fuzz(dev, dst, 0);
+		input_abs_set_flat(dev, dst, input_abs_get_flat(dev, src));
+		input_abs_set_res(dev, dst, input_abs_get_res(dev, src));
 		dev->absbit[BIT_WORD(dst)] |= BIT_MASK(dst);
 	}
 }
@@ -57,8 +61,8 @@ static unsigned int input_estimate_events_per_packet(struct input_dev *dev, stru
 	if (mt) {
 		mt_slots = mt->num_slots;
 	} else if (test_bit(ABS_MT_TRACKING_ID, dev->absbit)) {
-		mt_slots = dev->absinfo[ABS_MT_TRACKING_ID].maximum -
-			   dev->absinfo[ABS_MT_TRACKING_ID].minimum + 1,
+		mt_slots = input_abs_get_max(dev, ABS_MT_TRACKING_ID) -
+			   input_abs_get_min(dev, ABS_MT_TRACKING_ID) + 1;
 		mt_slots = clamp(mt_slots, 2, 32);
 	} else if (test_bit(ABS_MT_POSITION_X, dev->absbit)) {
 		mt_slots = 2;

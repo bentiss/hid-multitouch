@@ -177,7 +177,7 @@ static int input_handle_abs_event(struct input_dev *dev, struct input_mt *mt,
 
 	if (pold) {
 		*pval = input_defuzz_abs_event(*pval, *pold,
-						dev->absinfo[code].fuzz);
+						input_abs_get_fuzz(dev, code));
 		if (*pold == *pval)
 			return INPUT_IGNORE_EVENT;
 

@@ -870,9 +870,9 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 	 * compat:
 	 * - remove fuzz for emulated ABS_X/Y
 	 */
-	if (input->absinfo && test_bit(ABS_X, input->absbit)) {
-		input->absinfo[ABS_X].fuzz = 0;
-		input->absinfo[ABS_Y].fuzz = 0;
+	if (test_bit(ABS_X, input->absbit)) {
+		input_abs_set_fuzz(input, ABS_X, 0);
+		input_abs_set_fuzz(input, ABS_Y, 0);
 	}
 	/** end of compat */
 
