@@ -39,13 +39,12 @@
  */
 
 #include <linux/device.h>
-#include <linux/hid.h>
+#include "compat-hid.h"
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
 #include "compat-mt.h"
 #include <linux/string.h>
-#include "compat.h"
 
 
 MODULE_AUTHOR("Stephane Chatty <chatty@enac.fr>");
@@ -174,14 +173,6 @@ struct mt_device {
 	unsigned mt_flags;	/* flags to pass to input-mt */
 
 	/** compat */
-	/* .report() emulation */
-	unsigned last_touch_report_offset;
-	unsigned last_pen_report_offset;
-	/* .usage_index emulation */
-	int prev_touch_report_offset;
-	unsigned touch_usage_index;
-	int prev_pen_report_offset;
-	unsigned pen_usage_index;
 	/* use compat mt library */
 	struct input_mt *mt;
 	/** end of compat */
@@ -189,9 +180,6 @@ struct mt_device {
 
 static void mt_post_parse_default_settings(struct mt_device *td);
 static void mt_post_parse(struct mt_device *td);
-/** compat */
-static void mt_report(struct hid_device *hid, struct hid_report *report);
-/** end of compat */
 
 /* classes of device behavior */
 #define MT_CLS_DEFAULT				0x0001
@@ -451,48 +439,6 @@ static void mt_store_field(struct hid_usage *usage, struct mt_device *td,
 	f->usages[f->length++] = usage->hid;
 }
 
-/**
- * compat:
- * - compute the actual usage bit offset in the report.
- */
-static unsigned mt_report_offset(struct hid_field *field,
-		unsigned usage_index)
-{
-	return field->report_offset + field->report_size * usage_index;
-}
-/** end of compat */
-
-/**
- * compat:
- * - compute the usage_index of an usage in a field.
- *
- * @return the usage_index
- */
-static unsigned mt_incr_usage_index(struct mt_device *td,
-		struct hid_field *field, int is_pen)
-{
-	int *prev_report_offset;
-	unsigned *usage_index;
-
-	if (is_pen) {
-		prev_report_offset = &td->prev_pen_report_offset;
-		usage_index = &td->pen_usage_index;
-	} else {
-		prev_report_offset = &td->prev_touch_report_offset;
-		usage_index = &td->touch_usage_index;
-	}
-
-	if (*prev_report_offset == field->report_offset)
-		*usage_index = *usage_index + 1;
-	else
-		*usage_index = 0;
-
-	*prev_report_offset = field->report_offset;
-
-	return *usage_index;
-}
-/** end of compat */
-
 static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
 		unsigned long **bit, int *max)
@@ -500,15 +446,6 @@ static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	struct mt_device *td = hid_get_drvdata(hdev);
 
 	td->pen_report_id = field->report->id;
-
-	/**
-	 * compat:
-	 * - retrieve the last report_offset to know when we are at the end of
-	 *   the report. This is required because hid-core drops constant items.
-	 */
-	td->last_pen_report_offset = mt_report_offset(field,
-			mt_incr_usage_index(td, field, 1));
-	/** end of compat */
 
 	return 0;
 }
@@ -564,7 +501,7 @@ static void mt_pen_input_configured(struct hid_device *hdev,
 
 static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max)
+		unsigned long **bit, int *max, unsigned usage_index)
 {
 	struct mt_device *td = hid_get_drvdata(hdev);
 	struct mt_class *cls = &td->mtclass;
@@ -574,15 +511,6 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	if (field->application == HID_DG_TOUCHSCREEN)
 		td->mt_flags |= INPUT_MT_DIRECT;
 
-	/**
-	 * compat:
-	 * - retrieve the last report_offset to know when we are at the end of
-	 *   the report. This is required because hid-core drops constant items.
-	 */
-	td->last_touch_report_offset = mt_report_offset(field,
-			mt_incr_usage_index(td, field, 0));
-	/** end of compat */
-
 	/*
 	 * Model touchscreens providing buttons as touchpads.
 	 */
@@ -590,8 +518,8 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	    (usage->hid & HID_USAGE_PAGE) == HID_UP_BUTTON)
 		td->mt_flags |= INPUT_MT_POINTER;
 
-	if (td->touch_usage_index)
-		prev_usage = &field->usage[td->touch_usage_index - 1];
+	if (usage_index)
+		prev_usage = &field->usage[usage_index - 1];
 
 	switch (usage->hid & HID_USAGE_PAGE) {
 
@@ -682,7 +610,7 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 			return 1;
 		case HID_DG_CONTACTCOUNT:
 			td->cc_index = field->index;
-			td->cc_value_index = td->touch_usage_index;
+			td->cc_value_index = usage_index;
 			return 1;
 		case HID_DG_CONTACTMAX:
 			/* we don't set td->last_slot_field as contactcount and
@@ -812,7 +740,8 @@ static int mt_touch_event(struct hid_device *hid, struct hid_field *field,
 }
 
 static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
-				struct hid_usage *usage, __s32 value)
+				struct hid_usage *usage, __s32 value,
+				unsigned usage_index)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
 	__s32 quirks = td->mtclass.quirks;
@@ -872,7 +801,7 @@ static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
 			return;
 		}
 
-		if (td->touch_usage_index + 1 == field->report_count) {
+		if (usage_index + 1 == field->report_count) {
 			/* we only take into account the last report. */
 			if (usage->hid == td->last_slot_field)
 				mt_complete_slot(td, field->hidinput->input);
@@ -906,16 +835,9 @@ static void mt_touch_report(struct hid_device *hid, struct hid_report *report)
 		if (!(HID_MAIN_ITEM_VARIABLE & field->flags))
 			continue;
 
-		for (n = 0; n < count; n++) {
-			/**
-			 * compat:
-			 * - emulate usage_index
-			 */
-			td->touch_usage_index = n;
-			/** end of compat */
+		for (n = 0; n < count; n++)
 			mt_process_mt_event(hid, field, &field->usage[n],
-					field->value[n]);
-		}
+					field->value[n], n);
 	}
 
 	if (td->num_received >= td->num_expected)
@@ -959,7 +881,7 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 
 static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max)
+		unsigned long **bit, int *max, unsigned usage_index)
 {
 	/* Only map fields from TouchScreen or TouchPad collections.
 	* We need to ignore fields that belong to other collections
@@ -972,7 +894,7 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	if (field->physical == HID_DG_STYLUS)
 		return mt_pen_input_mapping(hdev, hi, field, usage, bit, max);
 
-	return mt_touch_input_mapping(hdev, hi, field, usage, bit, max);
+	return mt_touch_input_mapping(hdev, hi, field, usage, bit, max, usage_index);
 }
 
 static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
@@ -989,41 +911,15 @@ static int mt_event(struct hid_device *hid, struct hid_field *field,
 				struct hid_usage *usage, __s32 value)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
-	int ret = 1; /* ignore reports by default */
-	unsigned last_report_offset = 0;
-	unsigned usage_index = 0;
 
 	if (field->report->id == td->mt_report_id)
-		ret = mt_touch_event(hid, field, usage, value);
+		return mt_touch_event(hid, field, usage, value);
 
-	else if (field->report->id == td->pen_report_id)
-		ret = mt_pen_event(hid, field, usage, value);
+	if (field->report->id == td->pen_report_id)
+		return mt_pen_event(hid, field, usage, value);
 
-	/**
-	 * compat:
-	 * - compute the usage_index
-	 * - store the field value to emulate .report()
-	 * - when accessing the last field, call mt_report()
-	 */
-	if (field->report->id == td->mt_report_id) {
-		last_report_offset = td->last_touch_report_offset;
-		usage_index = mt_incr_usage_index(td, field, 0);
-	} else if (field->report->id == td->pen_report_id) {
-		last_report_offset = td->last_pen_report_offset;
-		usage_index = mt_incr_usage_index(td, field, 1);
-	}
-
-	field->value[usage_index] = value;
-
-	if ((last_report_offset > 0) &&
-	    (usage_index + 1 == field->report_count) &&
-	    (mt_report_offset(field, usage_index) == last_report_offset)) {
-		/* we are on the last field of the incoming report. */
-		mt_report(hid, field->report);
-	}
-	/** end of compat */
-
-	return ret;
+	/* ignore other reports */
+	return 1;
 }
 
 static void mt_report(struct hid_device *hid, struct hid_report *report)
@@ -1126,6 +1022,18 @@ static void mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
 
 	if (hi->report->id == td->pen_report_id)
 		mt_pen_input_configured(hdev, hi);
+
+#ifndef HID_QUIRK_NO_EMPTY_INPUT
+	if (hi->report->id != td->pen_report_id &&
+	    hi->report->id != td->mt_report_id) {
+		char *name = kzalloc(strlen(hi->input->name) + 13, GFP_KERNEL);
+		if (name) {
+			sprintf(name, "%s (No Events)", hi->input->name);
+			mt_free_input_name(hi);
+			hi->input->name = name;
+		}
+	}
+#endif
 }
 
 static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
@@ -1153,7 +1061,9 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	 * device.
 	 */
 	hdev->quirks |= HID_QUIRK_MULTI_INPUT;
+#ifdef HID_QUIRK_NO_EMPTY_INPUT
 	hdev->quirks |= HID_QUIRK_NO_EMPTY_INPUT;
+#endif
 
 	td = kzalloc(sizeof(struct mt_device), GFP_KERNEL);
 	if (!td) {
@@ -1166,10 +1076,6 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	td->cc_index = -1;
 	td->mt_report_id = -1;
 	td->pen_report_id = -1;
-	/** compat */
-	td->prev_touch_report_offset = -1;
-	td->prev_pen_report_offset = -1;
-	/** end of compat */
 	hid_set_drvdata(hdev, td);
 
 	td->fields = kzalloc(sizeof(struct mt_fields), GFP_KERNEL);
@@ -1572,7 +1478,7 @@ static const struct hid_usage_id mt_grabbed_usages[] = {
 	{ HID_ANY_ID - 1, HID_ANY_ID - 1, HID_ANY_ID - 1}
 };
 
-static struct hid_driver mt_driver = {
+static struct __compat_hid_driver mt_driver = {
 	.name = "hid-mt-compat",
 	.id_table = mt_devices,
 	.probe = mt_probe,
@@ -1583,6 +1489,7 @@ static struct hid_driver mt_driver = {
 	.feature_mapping = mt_feature_mapping,
 	.usage_table = mt_grabbed_usages,
 	.event = mt_event,
+	.report = mt_report,
 #ifdef CONFIG_PM
 	.reset_resume = mt_reset_resume,
 	.resume = mt_resume,

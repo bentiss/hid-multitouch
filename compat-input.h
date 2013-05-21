@@ -13,11 +13,26 @@
  */
 
 #include <linux/input.h>
+#include <linux/version.h>
 
 /**
  * forward declaration of input_mt.
  */
 struct input_mt;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0)
+/**
+ * struct input_value - input value representation
+ * @type: type of value (EV_KEY, EV_ABS, etc)
+ * @code: the value code
+ * @value: the value
+ */
+struct input_value {
+	__u16 type;
+	__u16 code;
+	__s32 value;
+};
+#endif
 
 /**
  * input_event() - report new input event

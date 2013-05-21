@@ -12,6 +12,7 @@
 #include "compat-input.h"
 #include "compat-mt.h"
 #include <linux/export.h>
+#include <linux/version.h>
 
 /* undefine the compat emulation in case we need the real ones */
 #undef input_sync
@@ -82,9 +83,12 @@ static unsigned int input_to_handler(struct input_handle *handle,
 	if (!count)
 		return 0;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0)
 	if (handler->events)
 		handler->events(handle, vals, count);
-	else if (handler->event)
+	else
+#endif
+	if (handler->event)
 		for (v = vals; v != end; v++)
 			handler->event(handle, v->type, v->code, v->value);
 
@@ -354,7 +358,6 @@ void __compat_input_event(struct input_dev *dev, struct input_mt *mt,
 		 unsigned int type, unsigned int code, int value)
 {
 	unsigned long flags;
-	bool forward_to_core_input = true;
 
 	if (!is_event_supported(type, dev->evbit, EV_MAX))
 		return;
@@ -365,7 +368,6 @@ void __compat_input_event(struct input_dev *dev, struct input_mt *mt,
 		spin_unlock_irqrestore(&dev->event_lock, flags);
 	}
 	else
-	if (forward_to_core_input)
 		input_event(dev, type, code, value);
 }
 EXPORT_SYMBOL(__compat_input_event);
