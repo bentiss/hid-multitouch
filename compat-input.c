@@ -164,7 +164,11 @@ static int input_handle_abs_event(struct input_dev *dev, struct input_mt *mt,
 	is_mt_event = input_is_mt_value(code);
 
 	if (!is_mt_event) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 		pold = &dev->absinfo[code].value;
+#else
+		pold = &dev->abs[code];
+#endif
 	} else if (mt) {
 		pold = &mt->slots[mt->slot].abs[code - ABS_MT_FIRST];
 	} else {

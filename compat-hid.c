@@ -292,15 +292,21 @@ int __compat___hid_register_driver(struct __compat_hid_driver *__hid_driver,
 	hdrv->usage_table = __hid_driver->usage_table;
 	hdrv->event = &__compat_event;
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 	hdrv->report_fixup = __hid_driver->report_fixup;
+#endif
 
 	hdrv->input_mapping = &__compat_input_mapping;
 	hdrv->input_mapped = __hid_driver->input_mapped;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 	hdrv->feature_mapping = __hid_driver->feature_mapping;
+#endif
 #ifdef CONFIG_PM
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 	hdrv->suspend = __hid_driver->suspend;
 	hdrv->resume = __hid_driver->resume;
 	hdrv->reset_resume = __hid_driver->reset_resume;
+#endif
 #endif
 	return __hid_register_driver(hdrv, owner, mod_name);
 }

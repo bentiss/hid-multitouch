@@ -152,12 +152,16 @@ int __compat_input_mt_init_slots(struct input_dev *dev, struct input_mt **p_mt,
 			__set_bit(BTN_TOOL_QUADTAP, dev->keybit);
 		if (num_slots >= 5)
 			__set_bit(BTN_TOOL_QUINTTAP, dev->keybit);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 		__set_bit(INPUT_PROP_POINTER, dev->propbit);
+#endif
 	}
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 	if (flags & INPUT_MT_DIRECT)
 		__set_bit(INPUT_PROP_DIRECT, dev->propbit);
 	if (flags & INPUT_MT_SEMI_MT)
 		__set_bit(INPUT_PROP_SEMI_MT, dev->propbit);
+#endif
 	if (flags & INPUT_MT_TRACK) {
 		unsigned int n2 = num_slots * num_slots;
 		mt->red = kcalloc(n2, sizeof(*mt->red), GFP_KERNEL);

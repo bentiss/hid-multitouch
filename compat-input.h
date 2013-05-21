@@ -15,6 +15,29 @@
 #include <linux/input.h>
 #include <linux/version.h>
 
+#ifndef ABS_MT_SLOT
+#define ABS_MT_SLOT		0x2f	/* MT slot being modified */
+#define ABS_MT_TOUCH_MAJOR	0x30	/* Major axis of touching ellipse */
+#define ABS_MT_TOUCH_MINOR	0x31	/* Minor axis (omit if circular) */
+#define ABS_MT_WIDTH_MAJOR	0x32	/* Major axis of approaching ellipse */
+#define ABS_MT_WIDTH_MINOR	0x33	/* Minor axis (omit if circular) */
+#define ABS_MT_ORIENTATION	0x34	/* Ellipse orientation */
+#define ABS_MT_POSITION_X	0x35	/* Center X touch position */
+#define ABS_MT_POSITION_Y	0x36	/* Center Y touch position */
+#define ABS_MT_TOOL_TYPE	0x37	/* Type of touching device */
+#define ABS_MT_BLOB_ID		0x38	/* Group a set of packets as a blob */
+#define ABS_MT_TRACKING_ID	0x39	/* Unique ID of initiated contact */
+#define ABS_MT_PRESSURE		0x3a	/* Pressure on contact area */
+
+/* Implementation details, userspace should not care about these */
+#define ABS_MT_FIRST		ABS_MT_TOUCH_MAJOR
+#define ABS_MT_LAST		ABS_MT_TOOL_Y
+#endif
+
+#ifndef ABS_MT_DISTANCE
+#define ABS_MT_DISTANCE		0x3b	/* Contact hover distance */
+#endif
+
 #ifndef ABS_MT_TOOL_X
 #define ABS_MT_TOOL_X		0x3c	/* Center X tool position */
 #define ABS_MT_TOOL_Y		0x3d	/* Center Y tool position */
@@ -73,5 +96,42 @@ static inline void __compat_input_sync(struct input_dev *dev, struct input_mt *m
 	__compat_input_event((a), (b), (c), (d), (e))
 #define input_sync(a, b) \
 	__compat_input_sync((a), (b))
+
+#ifndef kstrtoul
+#define kstrtoul strict_strtoul
+#endif
+
+#ifndef input_abs_get_val
+static inline int input_abs_get_val(struct input_dev *dev,
+					  unsigned int axis)
+{
+	return dev->abs[axis];
+}
+
+static inline void input_abs_set_val(struct input_dev *dev,
+					   unsigned int axis, int val)
+{
+	dev->abs[axis] = val;
+}
+
+#define INPUT_GENERATE_ABS_ACCESSORS(_suffix, _item)			\
+static inline int input_abs_get_##_suffix(struct input_dev *dev,	\
+					  unsigned int axis)		\
+{									\
+	return dev->abs##_suffix[axis];					\
+}									\
+									\
+static inline void input_abs_set_##_suffix(struct input_dev *dev,	\
+					   unsigned int axis, int val)	\
+{									\
+	dev->abs##_suffix[axis] = val;				\
+}
+
+INPUT_GENERATE_ABS_ACCESSORS(min, minimum)
+INPUT_GENERATE_ABS_ACCESSORS(max, maximum)
+INPUT_GENERATE_ABS_ACCESSORS(fuzz, fuzz)
+INPUT_GENERATE_ABS_ACCESSORS(flat, flat)
+INPUT_GENERATE_ABS_ACCESSORS(res, resolution)
+#endif
 
 #endif

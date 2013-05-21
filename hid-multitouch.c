@@ -1053,7 +1053,9 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	/* This allows the driver to correctly support devices
 	 * that emit events over several HID messages.
 	 */
+#ifdef HID_QUIRK_NO_INPUT_SYNC
 	hdev->quirks |= HID_QUIRK_NO_INPUT_SYNC;
+#endif
 
 	/*
 	 * This allows the driver to handle different input sensors
