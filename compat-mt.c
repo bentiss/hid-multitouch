@@ -10,7 +10,9 @@
  */
 
 #include "compat-mt.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
 #include <linux/export.h>
+#endif
 #include <linux/slab.h>
 #include <linux/input.h>
 

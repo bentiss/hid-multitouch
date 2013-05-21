@@ -20,6 +20,10 @@
 #define ABS_MT_TOOL_Y		0x3d	/* Center Y tool position */
 #endif
 
+#ifndef BTN_TOOL_QUINTTAP
+#define BTN_TOOL_QUINTTAP	0x148	/* Five fingers on trackpad */
+#endif
+
 /**
  * forward declaration of input_mt.
  */

@@ -11,7 +11,9 @@
 
 #include "compat-input.h"
 #include "compat-mt.h"
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
 #include <linux/export.h>
+#endif
 #include <linux/version.h>
 
 /* undefine the compat emulation in case we need the real ones */
