@@ -73,9 +73,11 @@ static unsigned int input_to_handler(struct input_handle *handle,
 	struct input_value *v;
 
 	for (v = vals; v != vals + count; v++) {
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 34)
 		if (handler->filter &&
 		    handler->filter(handle, v->type, v->code, v->value))
 			continue;
+#endif
 		if (end != v)
 			*end = *v;
 		end++;

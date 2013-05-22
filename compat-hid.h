@@ -17,6 +17,9 @@
 	.bus = BUS_BLUETOOTH, .vendor = (ven), .product = (prod)
 #endif /* HID_GROUP_MULTITOUCH */
 
+#undef HID_MAX_FIELDS
+#define HID_MAX_FIELDS 256
+
 /**
  * struct __compat_hid_driver
  * @name: driver name (e.g. "Footech_bar-wheel")
