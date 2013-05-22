@@ -1,6 +1,19 @@
 #ifndef _COMPAT_H
 #define _COMPAT_H
 
+/*
+ * HID compat Library
+ *
+ * Copyright (c) 1999 Andreas Gal
+ * Copyright (c) 2000-2001 Vojtech Pavlik
+ * Copyright (c) 2006-2007 Jiri Kosina
+ * Copyright (c) 2013 Red Hat, inc
+ *
+ * This program is free software; you can redistribute it and/or modify it
+ * under the terms of the GNU General Public License version 2 as published by
+ * the Free Software Foundation.
+ */
+
 #include "compat-mt.h"
 #include <linux/hid.h>
 
