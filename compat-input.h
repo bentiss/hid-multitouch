@@ -101,7 +101,7 @@ static inline void __compat_input_sync(struct input_dev *dev, struct input_mt *m
 #define kstrtoul strict_strtoul
 #endif
 
-#ifndef input_abs_get_val
+#ifndef INPUT_GENERATE_ABS_ACCESSORS
 static inline int input_abs_get_val(struct input_dev *dev,
 					  unsigned int axis)
 {
