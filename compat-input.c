@@ -10,7 +10,8 @@
  */
 
 #include "compat-input.h"
-#include "compat-mt.h"
+#include <linux/slab.h>
+#include <linux/module.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
 #include <linux/export.h>
 #endif
@@ -146,9 +147,10 @@ static void input_pass_values(struct input_dev *dev,
 #define INPUT_FLUSH		8
 #define INPUT_PASS_TO_ALL	(INPUT_PASS_TO_HANDLERS | INPUT_PASS_TO_DEVICE)
 
-static int input_handle_abs_event(struct input_dev *dev, struct input_mt *mt,
+static int input_handle_abs_event(struct input_dev *dev,
 				  unsigned int code, int *pval)
 {
+	struct input_mt *mt = input_get_mt(dev);
 	bool is_mt_event;
 	int *pold;
 
@@ -199,7 +201,7 @@ static int input_handle_abs_event(struct input_dev *dev, struct input_mt *mt,
 	return INPUT_PASS_TO_HANDLERS;
 }
 
-static int input_get_disposition(struct input_dev *dev, struct input_mt *mt,
+static int input_get_disposition(struct input_dev *dev,
 			  unsigned int type, unsigned int code, int value)
 {
 	int disposition = INPUT_IGNORE_EVENT;
@@ -249,7 +251,7 @@ static int input_get_disposition(struct input_dev *dev, struct input_mt *mt,
 
 	case EV_ABS:
 		if (is_event_supported(code, dev->absbit, ABS_MAX))
-			disposition = input_handle_abs_event(dev, mt, code, &value);
+			disposition = input_handle_abs_event(dev, code, &value);
 
 		break;
 
@@ -303,51 +305,149 @@ static int input_get_disposition(struct input_dev *dev, struct input_mt *mt,
 	return disposition;
 }
 
-static void __compat_input_handle_event(struct input_dev *dev, struct input_mt *mt,
+static void __compat_input_handle_event(struct input_dev *dev,
 			       unsigned int type, unsigned int code, int value)
 {
 	int disposition;
+	struct __compat_input_dev *c_dev = __input_to_compat(dev);
 
-	disposition = input_get_disposition(dev, mt, type, code, value);
+	disposition = input_get_disposition(dev, type, code, value);
 
 	if ((disposition & INPUT_PASS_TO_DEVICE) && dev->event)
 		dev->event(dev, type, code, value);
 
-	if (!mt->vals)
+	if (!c_dev->vals)
 		return;
 
 	if (disposition & INPUT_PASS_TO_HANDLERS) {
 		struct input_value *v;
 
 		if (disposition & INPUT_SLOT) {
-			v = &mt->vals[mt->num_vals++];
+			v = &c_dev->vals[c_dev->num_vals++];
 			v->type = EV_ABS;
 			v->code = ABS_MT_SLOT;
-			v->value = mt->slot;
+			v->value = c_dev->mt->slot;
 		}
 
-		v = &mt->vals[mt->num_vals++];
+		v = &c_dev->vals[c_dev->num_vals++];
 		v->type = type;
 		v->code = code;
 		v->value = value;
 	}
 
 	if (disposition & INPUT_FLUSH) {
-		if (mt->num_vals >= 2)
-			input_pass_values(dev, mt->vals, mt->num_vals);
-		mt->num_vals = 0;
-	} else if (mt->num_vals >= mt->max_vals - 2) {
-		mt->vals[mt->num_vals++] = input_value_sync;
-		input_pass_values(dev, mt->vals, mt->num_vals);
-		mt->num_vals = 0;
+		if (c_dev->num_vals >= 2)
+			input_pass_values(dev, c_dev->vals, c_dev->num_vals);
+		c_dev->num_vals = 0;
+	} else if (c_dev->num_vals >= c_dev->max_vals - 2) {
+		c_dev->vals[c_dev->num_vals++] = input_value_sync;
+		input_pass_values(dev, c_dev->vals, c_dev->num_vals);
+		c_dev->num_vals = 0;
 	}
 
+}
+
+static unsigned int input_estimate_events_per_packet(struct input_dev *dev)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	struct input_mt *mt = _dev->mt;
+	int mt_slots;
+	int i;
+	unsigned int events;
+
+	if (mt) {
+		mt_slots = mt->num_slots;
+	} else if (test_bit(ABS_MT_TRACKING_ID, dev->absbit)) {
+		mt_slots = input_abs_get_max(dev, ABS_MT_TRACKING_ID) -
+			   input_abs_get_min(dev, ABS_MT_TRACKING_ID) + 1;
+		mt_slots = clamp(mt_slots, 2, 32);
+	} else if (test_bit(ABS_MT_POSITION_X, dev->absbit)) {
+		mt_slots = 2;
+	} else {
+		mt_slots = 0;
+	}
+
+	events = mt_slots + 1; /* count SYN_MT_REPORT and SYN_REPORT */
+
+	for (i = 0; i < ABS_CNT; i++) {
+		if (test_bit(i, dev->absbit)) {
+			if (input_is_mt_axis(i))
+				events += mt_slots;
+			else
+				events++;
+		}
+	}
+
+	for (i = 0; i < REL_CNT; i++)
+		if (test_bit(i, dev->relbit))
+			events++;
+
+	/* Make room for KEY and MSC events */
+	events += 7;
+
+	return events;
+}
+
+static struct __compat_input_dev *__do_input_allocate_extra(struct input_dev *dev)
+{
+	struct __compat_input_dev *extra = __input_to_compat(dev);
+
+	if (extra && !extra->vals && extra->mt) {
+		extra->max_vals = input_estimate_events_per_packet(dev) + 2;
+		extra->vals = kcalloc(extra->max_vals, sizeof(*extra->vals),
+					GFP_KERNEL);
+	}
+	return extra;
+}
+
+struct __compat_input_dev *input_allocate_extra(struct input_dev *dev)
+{
+	struct __compat_input_dev *extra;
+
+	if (__input_to_compat(dev))
+		return __do_input_allocate_extra(dev);
+
+	extra = kzalloc(sizeof(struct __compat_input_dev), GFP_KERNEL);
+	if (extra)
+		dev->dev.platform_data = extra;
+
+	return __do_input_allocate_extra(dev);
+}
+EXPORT_SYMBOL_GPL(input_allocate_extra);
+
+void input_free_extra(struct input_dev *dev)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	unsigned long flags;
+
+	if (!_dev)
+		return;
+
+	spin_lock_irqsave(&dev->event_lock, flags);
+	kfree(_dev);
+	dev->dev.platform_data = NULL;
+	spin_unlock_irqrestore(&dev->event_lock, flags);
+}
+EXPORT_SYMBOL_GPL(input_free_extra);
+
+struct input_mt *input_get_mt(struct input_dev *dev)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	if (_dev)
+		return _dev->mt;
+	return NULL;
+}
+
+void input_set_mt(struct input_dev *dev, struct input_mt *mt)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	if (_dev)
+		_dev->mt = mt;
 }
 
 /**
  * input_event() - report new input event
  * @dev: device that generated the event
- * @mt: mt slots definition
  * @type: type of the event
  * @code: event code
  * @value: value of the event
@@ -362,20 +462,25 @@ static void __compat_input_handle_event(struct input_dev *dev, struct input_mt *
  * to 'seed' initial state of a switch or initial position of absolute
  * axis, etc.
  */
-void __compat_input_event(struct input_dev *dev, struct input_mt *mt,
+void __compat_input_event(struct input_dev *dev,
 		 unsigned int type, unsigned int code, int value)
 {
+	struct __compat_input_dev *_dev;
 	unsigned long flags;
+	bool compat_called = 0;
 
 	if (!is_event_supported(type, dev->evbit, EV_MAX))
 		return;
 
-	if (mt) {
-		spin_lock_irqsave(&dev->event_lock, flags);
-		__compat_input_handle_event(dev, mt, type, code, value);
-		spin_unlock_irqrestore(&dev->event_lock, flags);
+	spin_lock_irqsave(&dev->event_lock, flags);
+	_dev = __input_to_compat(dev);
+	if (_dev && _dev->vals) {
+		__compat_input_handle_event(dev, type, code, value);
+		compat_called = 1;
 	}
-	else
+	spin_unlock_irqrestore(&dev->event_lock, flags);
+
+	if (!compat_called)
 		input_event(dev, type, code, value);
 }
 EXPORT_SYMBOL(__compat_input_event);

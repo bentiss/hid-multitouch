@@ -1,6 +1,3 @@
-#ifndef _COMPAT_INPUT_H
-#define _COMPAT_INPUT_H
-
 /*
  * Input compat Library
  *
@@ -11,9 +8,12 @@
  * under the terms of the GNU General Public License version 2 as published by
  * the Free Software Foundation.
  */
+#ifndef _COMPAT_INPUT_H
+#define _COMPAT_INPUT_H
 
 #include <linux/input.h>
 #include <linux/version.h>
+#include "compat-mt.h"
 
 #ifndef ABS_MT_SLOT
 #define ABS_MT_SLOT		0x2f	/* MT slot being modified */
@@ -47,11 +47,6 @@
 #define BTN_TOOL_QUINTTAP	0x148	/* Five fingers on trackpad */
 #endif
 
-/**
- * forward declaration of input_mt.
- */
-struct input_mt;
-
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0)
 /**
  * struct input_value - input value representation
@@ -65,6 +60,31 @@ struct input_value {
 	__s32 value;
 };
 #endif
+
+/**
+ * struct __compat_input_dev - represents an input device
+ * @mt: pointer to multitouch state
+ * @num_vals: number of values queued in the current frame
+ * @max_vals: maximum number of values queued in a frame
+ * @vals: array of values queued in the current frame
+ */
+struct __compat_input_dev {
+	struct input_mt *mt;
+
+	unsigned int num_vals;
+	unsigned int max_vals;
+	struct input_value *vals;
+};
+
+static inline struct __compat_input_dev *__input_to_compat(struct input_dev *dev)
+{
+	return (struct __compat_input_dev *)dev->dev.platform_data;
+}
+
+struct __compat_input_dev *input_allocate_extra(struct input_dev *dev);
+void input_free_extra(struct input_dev *dev);
+struct input_mt *input_get_mt(struct input_dev *dev);
+void input_set_mt(struct input_dev *dev, struct input_mt *mt);
 
 /**
  * input_event() - report new input event
@@ -84,18 +104,18 @@ struct input_value {
  * to 'seed' initial state of a switch or initial position of absolute
  * axis, etc.
  */
-void __compat_input_event(struct input_dev *dev, struct input_mt *mt,
+void __compat_input_event(struct input_dev *dev,
 		 unsigned int type, unsigned int code, int value);
 
-static inline void __compat_input_sync(struct input_dev *dev, struct input_mt *mt)
+static inline void __compat_input_sync(struct input_dev *dev)
 {
-	__compat_input_event(dev, mt, EV_SYN, SYN_REPORT, 0);
+	__compat_input_event(dev, EV_SYN, SYN_REPORT, 0);
 }
 
-#define input_event(a, b, c, d, e) \
-	__compat_input_event((a), (b), (c), (d), (e))
-#define input_sync(a, b) \
-	__compat_input_sync((a), (b))
+#define input_event(a, b, c, d) \
+	__compat_input_event((a), (b), (c), (d))
+#define input_sync(a) \
+	__compat_input_sync((a))
 
 #ifndef kstrtoul
 #define kstrtoul strict_strtoul

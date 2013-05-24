@@ -29,10 +29,6 @@
 #undef input_mt_assign_slots
 #undef input_mt_get_slot_by_key
 
-#undef input_event
-#define input_event(a, b, c, d) \
-	__compat_input_event((a), mt, (b), (c), (d))
-
 /* declare internal input_mt_init_slots() */
 int input_mt_init_slots(struct input_dev *dev, unsigned int num_slots,
 			unsigned int flags);
@@ -52,49 +48,9 @@ static void copy_abs(struct input_dev *dev, unsigned int dst, unsigned int src)
 	}
 }
 
-static unsigned int input_estimate_events_per_packet(struct input_dev *dev, struct input_mt *mt)
-{
-	int mt_slots;
-	int i;
-	unsigned int events;
-
-	if (mt) {
-		mt_slots = mt->num_slots;
-	} else if (test_bit(ABS_MT_TRACKING_ID, dev->absbit)) {
-		mt_slots = input_abs_get_max(dev, ABS_MT_TRACKING_ID) -
-			   input_abs_get_min(dev, ABS_MT_TRACKING_ID) + 1;
-		mt_slots = clamp(mt_slots, 2, 32);
-	} else if (test_bit(ABS_MT_POSITION_X, dev->absbit)) {
-		mt_slots = 2;
-	} else {
-		mt_slots = 0;
-	}
-
-	events = mt_slots + 1; /* count SYN_MT_REPORT and SYN_REPORT */
-
-	for (i = 0; i < ABS_CNT; i++) {
-		if (test_bit(i, dev->absbit)) {
-			if (input_is_mt_axis(i))
-				events += mt_slots;
-			else
-				events++;
-		}
-	}
-
-	for (i = 0; i < REL_CNT; i++)
-		if (test_bit(i, dev->relbit))
-			events++;
-
-	/* Make room for KEY and MSC events */
-	events += 7;
-
-	return events;
-}
-
 /**
  * input_mt_init_slots() - initialize MT input slots
  * @dev: input device supporting MT events and finger tracking
- * @mt: COMPAT: use the given struct input_mt instead
  * @num_slots: number of slots used by the device
  * @flags: mt tasks to handle in core
  *
@@ -107,11 +63,11 @@ static unsigned int input_estimate_events_per_packet(struct input_dev *dev, stru
  * May be called repeatedly. Returns -EINVAL if attempting to
  * reinitialize with a different number of slots.
  */
-int __compat_input_mt_init_slots(struct input_dev *dev, struct input_mt **p_mt,
+int __compat_input_mt_init_slots(struct input_dev *dev,
 			unsigned int num_slots, unsigned int flags)
 {
-	/** compat: dropped: struct input_mt *mt = dev->mt; */
-	struct input_mt *mt = *p_mt;
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
 	/** end of compat */
 	int i;
 
@@ -126,12 +82,6 @@ int __compat_input_mt_init_slots(struct input_dev *dev, struct input_mt **p_mt,
 
 	mt->num_slots = num_slots;
 	mt->flags = flags;
-
-	mt->max_vals = input_estimate_events_per_packet(dev, mt) + 2;
-	mt->vals = kcalloc(mt->max_vals, sizeof(*mt->vals), GFP_KERNEL);
-	if (!mt->vals)
-		goto err_mem;
-
 	input_set_abs_params(dev, ABS_MT_SLOT, 0, num_slots - 1, 0, 0);
 	input_set_abs_params(dev, ABS_MT_TRACKING_ID, 0, TRKID_MAX, 0, 0);
 
@@ -173,19 +123,16 @@ int __compat_input_mt_init_slots(struct input_dev *dev, struct input_mt **p_mt,
 	for (i = 0; i < num_slots; i++)
 		input_mt_set_value(&mt->slots[i], ABS_MT_TRACKING_ID, -1);
 
+	input_set_mt(dev, mt);
 	/**
 	 * compat:
-	 * - dropped: dev->mt = mt;
 	 * - use internal slots initialization to prevent errors when
 	 *   using ioctls
 	*/
-	*p_mt = mt;
 	input_mt_init_slots(dev, num_slots, flags);
 	/** end of compat */
 	return 0;
 err_mem:
-	if (mt)
-		kfree(mt->vals);
 	kfree(mt);
 	return -ENOMEM;
 }
@@ -198,21 +145,27 @@ EXPORT_SYMBOL(__compat_input_mt_init_slots);
  * This function is only needed in error path as the input core will
  * automatically free the MT slots when the device is destroyed.
  */
-void __compat_input_mt_destroy_slots(struct input_dev *dev, struct input_mt *mt)
+void __compat_input_mt_destroy_slots(struct input_dev *dev)
 {
-	if (mt) {
-		kfree(mt->vals);
-		kfree(mt->red);
-		kfree(mt);
+	unsigned long flags;
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	/** end of compat */
+
+	if (!_dev)
+		return;
+
+	spin_lock_irqsave(&dev->event_lock, flags);
+//	printk(KERN_ERR "%s %s:%d\n", __func__, __FILE__, __LINE__);
+
+	if (_dev->mt) {
+		kfree(_dev->mt->red);
+		kfree(_dev->mt);
 	}
+	_dev->mt = NULL;
+	spin_unlock_irqrestore(&dev->event_lock, flags);
 }
 EXPORT_SYMBOL(__compat_input_mt_destroy_slots);
-
-void __compat_input_mt_slot(struct input_dev *dev, struct input_mt *mt, int slot)
-{
-	input_event(dev, EV_ABS, ABS_MT_SLOT, slot);
-}
-EXPORT_SYMBOL(__compat_input_mt_slot);
 
 /**
  * input_mt_report_slot_state() - report contact state
@@ -226,9 +179,12 @@ EXPORT_SYMBOL(__compat_input_mt_slot);
  * assigned to the slot. The tool type is only reported if the
  * corresponding absbit field is set.
  */
-void __compat_input_mt_report_slot_state(struct input_dev *dev, struct input_mt *mt,
+void __compat_input_mt_report_slot_state(struct input_dev *dev,
 				unsigned int tool_type, bool active)
 {
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
+	/** end of compat */
 	struct input_mt_slot *slot;
 	int id;
 
@@ -263,7 +219,7 @@ EXPORT_SYMBOL(__compat_input_mt_report_slot_state);
  * The input core ensures only the KEY events already setup for
  * this device will produce output.
  */
-void __compat_input_mt_report_finger_count(struct input_dev *dev, struct input_mt *mt, int count)
+void __compat_input_mt_report_finger_count(struct input_dev *dev, int count)
 {
 	input_event(dev, EV_KEY, BTN_TOOL_FINGER, count == 1);
 	input_event(dev, EV_KEY, BTN_TOOL_DOUBLETAP, count == 2);
@@ -285,8 +241,11 @@ EXPORT_SYMBOL(__compat_input_mt_report_finger_count);
  * this device will produce output.
  */
 void __compat_input_mt_report_pointer_emulation(struct input_dev *dev,
-		struct input_mt *mt, bool use_count)
+		bool use_count)
 {
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
+	/** end of compat */
 	struct input_mt_slot *oldest;
 	int oldid, count, i;
 
@@ -312,7 +271,7 @@ void __compat_input_mt_report_pointer_emulation(struct input_dev *dev,
 
 	input_event(dev, EV_KEY, BTN_TOUCH, count > 0);
 	if (use_count)
-		__compat_input_mt_report_finger_count(dev, mt, count);
+		__compat_input_mt_report_finger_count(dev, count);
 
 	if (oldest) {
 		int x = input_mt_get_value(oldest, ABS_MT_POSITION_X);
@@ -340,8 +299,11 @@ EXPORT_SYMBOL(__compat_input_mt_report_pointer_emulation);
  * Depending on the flags, marks unused slots as inactive and performs
  * pointer emulation.
  */
-void __compat_input_mt_sync_frame(struct input_dev *dev, struct input_mt *mt)
+void __compat_input_mt_sync_frame(struct input_dev *dev)
 {
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
+	/** end of compat */
 	struct input_mt_slot *s;
 	bool use_count = false;
 
@@ -352,7 +314,7 @@ void __compat_input_mt_sync_frame(struct input_dev *dev, struct input_mt *mt)
 		for (s = mt->slots; s != mt->slots + mt->num_slots; s++) {
 			if (input_mt_is_used(mt, s))
 				continue;
-			__compat_input_mt_slot(dev, mt, s - mt->slots);
+			input_mt_slot(dev, s - mt->slots);
 			input_event(dev, EV_ABS, ABS_MT_TRACKING_ID, -1);
 		}
 	}
@@ -360,7 +322,7 @@ void __compat_input_mt_sync_frame(struct input_dev *dev, struct input_mt *mt)
 	if ((mt->flags & INPUT_MT_POINTER) && !(mt->flags & INPUT_MT_SEMI_MT))
 		use_count = true;
 
-	__compat_input_mt_report_pointer_emulation(dev, mt, use_count);
+	__compat_input_mt_report_pointer_emulation(dev, use_count);
 
 	mt->frame++;
 }
@@ -473,10 +435,13 @@ static void input_mt_set_slots(struct input_mt *mt,
  *
  * Returns zero on success, or negative error in case of failure.
  */
-int __compat_input_mt_assign_slots(struct input_dev *dev, struct input_mt *mt,
+int __compat_input_mt_assign_slots(struct input_dev *dev,
 			  int *slots, const struct input_mt_pos *pos,
 			  int num_pos)
 {
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
+	/** end of compat */
 	int nrc;
 
 	if (!mt || !mt->red)
@@ -504,9 +469,12 @@ EXPORT_SYMBOL(__compat_input_mt_assign_slots);
  *
  * If no available slot can be found, -1 is returned.
  */
-int __compat_input_mt_get_slot_by_key(struct input_dev *dev, struct input_mt *mt,
+int __compat_input_mt_get_slot_by_key(struct input_dev *dev,
 			     int key)
 {
+	/** compat: use struct input_mt *mt from __compat_input_dev */
+	struct input_mt *mt = input_get_mt(dev);
+	/** end of compat */
 	struct input_mt_slot *s;
 
 	if (!mt)

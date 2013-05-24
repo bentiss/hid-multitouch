@@ -110,6 +110,27 @@ struct __compat_hid_driver {
 	struct hid_driver hdrv;
 };
 
+/**
+ * hid_hw_stop - stop underlaying HW
+ *
+ * @hdev: hid device
+ *
+ * This is usually called from remove function or from probe when something
+ * failed and hid_hw_start was called already.
+ */
+static inline void __compat_hid_hw_stop(struct hid_device *hdev)
+{
+	struct hid_input *hi;
+
+	list_for_each_entry(hi, &hdev->inputs, list) {
+		input_mt_destroy_slots(hi->input);
+		input_free_extra(hi->input);
+	}
+	hid_disconnect(hdev);
+	hdev->ll_driver->stop(hdev);
+}
+#define hid_hw_stop(a) __compat_hid_hw_stop((a))
+
 int __compat___hid_register_driver(struct __compat_hid_driver *hdrv,
 		struct module *owner, const char *mod_name);
 

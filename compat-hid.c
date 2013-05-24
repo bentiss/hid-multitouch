@@ -258,6 +258,9 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	unsigned usage_index = get_usage_index(field, usage);
 	int ret = 0;
 
+	if (!input_allocate_extra(hi->input))
+		return -1;
+
 	if (c_hdrv->input_mapping)
 		ret = c_hdrv->input_mapping(hdev, hi, field, usage, bit, max,
 					    usage_index);
@@ -265,6 +268,7 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	if (c_hdrv->input_configured && last_variable_field(field, usage)) {
 		hi->report = field->report;
 		c_hdrv->input_configured(hdev, hi);
+		input_allocate_extra(hi->input);
 	}
 
 	return ret;

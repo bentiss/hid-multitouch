@@ -68,63 +68,6 @@ MODULE_LICENSE("GPL");
 #define MT_QUIRK_HOVERING		(1 << 11)
 #define MT_QUIRK_CONTACT_CNT_ACCURATE	(1 << 12)
 
-/**
- * compat:
- * - use compat mt/input libs
- */
-#undef input_event
-#define input_event(a, b, c, d) \
-	__compat_input_event((a), td->mt, (b), (c), (d))
-
-#undef input_sync
-#define input_sync(a) \
-	__compat_input_sync((a), td->mt)
-
-#undef input_mt_assign_slots
-#define input_mt_assign_slots(a, b, c, d) \
-	__compat_input_mt_assign_slots((a), td->mt, (b), (c), (d))
-
-#undef input_mt_get_slot_by_key
-#define input_mt_get_slot_by_key(a, b) \
-	__compat_input_mt_get_slot_by_key((a), td->mt, (b))
-
-#undef input_mt_init_slots
-#define input_mt_init_slots(a, b, c) \
-	__compat_input_mt_init_slots((a), &td->mt, (b), (c))
-
-#undef input_mt_destroy_slots
-#define input_mt_destroy_slots(a) \
-	__compat_input_mt_destroy_slots((a), td->mt)
-
-#undef input_mt_slot
-#define input_mt_slot(a, b) \
-	__compat_input_mt_slot((a), td->mt, (b))
-
-#undef input_mt_report_slot_state
-#define input_mt_report_slot_state(a, b, c) \
-	__compat_input_mt_report_slot_state((a), td->mt, (b), (c))
-
-#undef input_mt_report_finger_count
-#define input_mt_report_finger_count(a, b) \
-	__compat_input_mt_report_finger_count((a), td->mt, (b))
-
-#undef input_mt_report_pointer_emulation
-#define input_mt_report_pointer_emulation(a, b) \
-	__compat_input_mt_report_pointer_emulation((a), td->mt, (b))
-
-#undef input_mt_sync_frame
-#define input_mt_sync_frame(a) \
-	__compat_input_mt_sync_frame((a), td->mt)
-
-#undef input_mt_assign_slots
-#define input_mt_assign_slots(a, b, c, d) \
-	__compat_input_mt_assign_slots((a), td->mt, (b), (c), (d))
-
-#undef input_mt_get_slot_by_key
-#define input_mt_get_slot_by_key(a, b) \
-	__compat_input_mt_get_slot_by_key((a), td->mt, (b))
-/** end of compat */
-
 struct mt_slot {
 	__s32 x, y, cx, cy, p, w, h;
 	__s32 contactid;	/* the device ContactID assigned to this slot */
@@ -171,11 +114,6 @@ struct mt_device {
 	bool serial_maybe;	/* need to check for serial protocol */
 	bool curvalid;		/* is the current contact valid? */
 	unsigned mt_flags;	/* flags to pass to input-mt */
-
-	/** compat */
-	/* use compat mt library */
-	struct input_mt *mt;
-	/** end of compat */
 };
 
 static void mt_post_parse_default_settings(struct mt_device *td);
@@ -481,7 +419,7 @@ static void mt_pen_report(struct hid_device *hid, struct hid_report *report)
  * - pen use internal hid processing, so use internal input_sync (not compat).
  */
 #define input_sync(a) \
-	__compat_input_sync((a), td->mt)
+	__compat_input_sync((a))
 /** end of compat */
 
 
@@ -680,7 +618,7 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 	if (td->curvalid || (td->mtclass.quirks & MT_QUIRK_ALWAYS_VALID)) {
 		int slotnum = mt_compute_slot(td, input);
 		struct mt_slot *s = &td->curdata;
-		struct input_mt *mt = td->mt; /** compat */
+		struct input_mt *mt = input_get_mt(input); /** compat */
 
 		if (slotnum < 0 || slotnum >= td->maxcontacts)
 			return;
@@ -1112,7 +1050,6 @@ hid_fail:
 	list_for_each_entry(hi, &hdev->inputs, list)
 		mt_free_input_name(hi);
 fail:
-	kfree(td->mt);
 	kfree(td->fields);
 	kfree(td);
 	return ret;
@@ -1149,7 +1086,6 @@ static void mt_remove(struct hid_device *hdev)
 	list_for_each_entry(hi, &hdev->inputs, list)
 		mt_free_input_name(hi);
 
-	kfree(td->mt);
 	kfree(td);
 	hid_set_drvdata(hdev, NULL);
 }
