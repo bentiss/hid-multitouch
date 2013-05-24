@@ -1001,9 +1001,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	 * device.
 	 */
 	hdev->quirks |= HID_QUIRK_MULTI_INPUT;
-#ifdef HID_QUIRK_NO_EMPTY_INPUT
 	hdev->quirks |= HID_QUIRK_NO_EMPTY_INPUT;
-#endif
 
 	td = kzalloc(sizeof(struct mt_device), GFP_KERNEL);
 	if (!td) {

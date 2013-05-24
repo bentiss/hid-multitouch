@@ -30,8 +30,24 @@
 	.bus = BUS_BLUETOOTH, .vendor = (ven), .product = (prod)
 #endif /* HID_GROUP_MULTITOUCH */
 
+/**
+ * compat: set HID_MAX_FIELDS to 256
+ * - older kernels have this field set to 64, but multitouch devices often
+ *   present more than 64 fields.
+ */
 #undef HID_MAX_FIELDS
 #define HID_MAX_FIELDS 256
+
+/**
+ * compat: __COMPAT_HID_QUIRK_NO_EMPTY_INPUT
+ * - the kernel does not support one input per report, discarding empty inputs.
+ */
+#ifndef HID_QUIRK_NO_EMPTY_INPUT
+#define HID_QUIRK_NO_EMPTY_INPUT		0x00000100
+#endif /* HID_QUIRK_NO_EMPTY_INPUT */
+
+#define __COMPAT_HID_QUIRK_NO_EMPTY_INPUT
+#define __COMPAT_HID_QUIRK_MULTI_INPUT		0x00000200
 
 /**
  * struct __compat_hid_driver

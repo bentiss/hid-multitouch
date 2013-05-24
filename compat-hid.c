@@ -249,6 +249,41 @@ static int last_variable_field(struct hid_field *field, struct hid_usage *usage)
 	return 1;
 }
 
+static bool hidinput_has_been_populated(struct hid_input *hidinput)
+{
+	int i;
+	unsigned long r = 0;
+
+	for (i = 0; i < BITS_TO_LONGS(EV_CNT); i++)
+		r |= hidinput->input->evbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(KEY_CNT); i++)
+		r |= hidinput->input->keybit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(REL_CNT); i++)
+		r |= hidinput->input->relbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(ABS_CNT); i++)
+		r |= hidinput->input->absbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(MSC_CNT); i++)
+		r |= hidinput->input->mscbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(LED_CNT); i++)
+		r |= hidinput->input->ledbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(SND_CNT); i++)
+		r |= hidinput->input->sndbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(FF_CNT); i++)
+		r |= hidinput->input->ffbit[i];
+
+	for (i = 0; i < BITS_TO_LONGS(SW_CNT); i++)
+		r |= hidinput->input->swbit[i];
+
+	return !!r;
+}
+
 static bool hidinput_configure_usage(struct hid_input *hidinput, struct hid_field *field,
 				     struct hid_usage *usage)
 {
@@ -315,18 +350,47 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 					    usage_index);
 
 	if (last_variable_field(field, usage)) {
+		bool called = false;
 		last_report = get_last_report(hdev, hi);
 
-		if (c_hdrv->input_configured &&
-		    (field->report == last_report ||
-		     (hdev->quirks & HID_QUIRK_MULTI_INPUT))) {
-			hi->report = field->report;
-			c_hdrv->input_configured(hdev, hi);
-			input_allocate_extra(hi->input);
+		if (hdev->quirks &
+		    (HID_QUIRK_MULTI_INPUT | __COMPAT_HID_QUIRK_MULTI_INPUT)) {
+			/* reset flags */
+			hdev->quirks |= HID_QUIRK_MULTI_INPUT;
+			hdev->quirks |= __COMPAT_HID_QUIRK_MULTI_INPUT;
 		}
 
-		if (field->report == last_report)
+		if ((hdev->quirks & HID_QUIRK_NO_EMPTY_INPUT) &&
+		    !hidinput_has_been_populated(hi))
+			/* empty input */
+			hdev->quirks &= ~HID_QUIRK_MULTI_INPUT;
+
+		if (hdev->quirks & HID_QUIRK_MULTI_INPUT) {
+			hi->report = field->report;
+			if (c_hdrv->input_configured)
+				c_hdrv->input_configured(hdev, hi);
 			input_allocate_extra(hi->input);
+			called = true;
+		}
+
+		if (field->report == last_report) {
+			/* last handled report, the same state if we were at
+			 * the end of hidinput_connect */
+			if (hdev->quirks & HID_QUIRK_NO_EMPTY_INPUT) {
+				/* no further inputs should be created */
+				hdev->quirks &= ~HID_QUIRK_MULTI_INPUT;
+				if (!hidinput_has_been_populated(hi))
+					called = true;
+			}
+			hi->report = field->report;
+			if (!called) {
+
+				if (c_hdrv->input_configured)
+					c_hdrv->input_configured(hdev, hi);
+
+				input_allocate_extra(hi->input);
+			}
+		}
 	}
 
 	return ret;
