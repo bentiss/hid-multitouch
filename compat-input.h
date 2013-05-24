@@ -77,6 +77,7 @@ struct __compat_input_dev {
 
 	/* private */
 	void *p;
+	void *p1;
 };
 
 static inline struct __compat_input_dev *__input_to_compat(struct input_dev *dev)

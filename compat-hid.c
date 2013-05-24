@@ -249,6 +249,30 @@ static int last_variable_field(struct hid_field *field, struct hid_usage *usage)
 	return 1;
 }
 
+static void report_features(struct hid_device *hid)
+{
+	struct hid_driver *hdrv = hid->driver;
+	struct __compat_hid_driver *drv = container_of(hdrv, struct __compat_hid_driver, hdrv);
+	struct hid_report_enum *rep_enum;
+	struct hid_report *rep;
+	int i, j;
+
+	rep_enum = &hid->report_enum[HID_FEATURE_REPORT];
+	list_for_each_entry(rep, &rep_enum->report_list, list)
+		for (i = 0; i < rep->maxfield; i++)
+			for (j = 0; j < rep->field[i]->maxusage; j++) {
+				/**
+				 * compat:
+				 * - dropp hidinput_setup_battery(hid, HID_FEATURE_REPORT, rep->field[i]);
+				 * Verify if Battery Strength feature is available
+				 */
+
+				if (drv->feature_mapping)
+					drv->feature_mapping(hid, rep->field[i],
+							     rep->field[i]->usage + j);
+			}
+}
+
 static bool hidinput_has_been_populated(struct hid_input *hidinput)
 {
 	int i;
@@ -298,15 +322,17 @@ static bool hidinput_configure_usage(struct hid_input *hidinput, struct hid_fiel
 	return 1;
 }
 
-static struct hid_report *get_last_report(struct hid_device *hdev, struct hid_input *hi)
+static void fetch_first_and_last_report(struct hid_device *hdev,
+	struct hid_input *hi)
 {
 	struct __compat_input_dev *_dev = __input_to_compat(hi->input);
 	struct hid_report *last_report = _dev->p;
+	struct hid_report *first_report = _dev->p1;
 	struct hid_report *report;
 	int max_report_type = HID_OUTPUT_REPORT;
 	int i, j, k;
 
-	if (!last_report) {
+	if (!last_report || !first_report) {
 
 		if (hdev->quirks & HID_QUIRK_SKIP_OUTPUT_REPORTS)
 			max_report_type = HID_INPUT_REPORT;
@@ -324,12 +350,35 @@ static struct hid_report *get_last_report(struct hid_device *hdev, struct hid_in
 					}
 				}
 
-				if (count)
+				if (count) {
 					last_report = report;
+					if (!first_report)
+						first_report = report;
+				}
 			}
 		_dev->p = last_report;
+		_dev->p1 = first_report;
 	}
-	return last_report;
+}
+
+static struct hid_report *get_last_report(struct hid_device *hdev, struct hid_input *hi)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(hi->input);
+
+	if (!_dev->p)
+		fetch_first_and_last_report(hdev, hi);
+
+	return _dev->p;
+}
+
+static struct hid_report *get_first_report(struct hid_device *hdev, struct hid_input *hi)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(hi->input);
+
+	if (!_dev->p1)
+		fetch_first_and_last_report(hdev, hi);
+
+	return _dev->p1;
 }
 
 static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
@@ -341,6 +390,11 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	unsigned usage_index = get_usage_index(field, usage);
 	struct hid_report *last_report;
 	int ret = 0;
+
+	if (!__input_to_compat(hi->input) &&
+	    input_allocate_extra(hi->input) &&
+	    field->report == get_first_report(hdev, hi))
+		report_features(hdev);
 
 	if (!input_allocate_extra(hi->input))
 		return -1;
@@ -437,9 +491,6 @@ int __compat___hid_register_driver(struct __compat_hid_driver *__hid_driver,
 
 	hdrv->input_mapping = &__compat_input_mapping;
 	hdrv->input_mapped = __hid_driver->input_mapped;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
-	hdrv->feature_mapping = __hid_driver->feature_mapping;
-#endif
 #ifdef CONFIG_PM
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 0, 0)
 	hdrv->suspend = __hid_driver->suspend;
