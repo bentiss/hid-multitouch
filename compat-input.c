@@ -347,6 +347,46 @@ static void __compat_input_handle_event(struct input_dev *dev,
 
 }
 
+/**
+ * input_event() - report new input event
+ * @dev: device that generated the event
+ * @type: type of the event
+ * @code: event code
+ * @value: value of the event
+ *
+ * This function should be used by drivers implementing various input
+ * devices to report input events. See also input_inject_event().
+ *
+ * NOTE: input_event() may be safely used right after input device was
+ * allocated with input_allocate_device(), even before it is registered
+ * with input_register_device(), but the event will not reach any of the
+ * input handlers. Such early invocation of input_event() may be used
+ * to 'seed' initial state of a switch or initial position of absolute
+ * axis, etc.
+ */
+void __compat_input_event(struct input_dev *dev,
+		 unsigned int type, unsigned int code, int value)
+{
+	struct __compat_input_dev *_dev;
+	unsigned long flags;
+	bool compat_called = 0;
+
+	if (!is_event_supported(type, dev->evbit, EV_MAX))
+		return;
+
+	spin_lock_irqsave(&dev->event_lock, flags);
+	_dev = __input_to_compat(dev);
+	if (_dev && _dev->vals) {
+		__compat_input_handle_event(dev, type, code, value);
+		compat_called = 1;
+	}
+	spin_unlock_irqrestore(&dev->event_lock, flags);
+
+	if (!compat_called)
+		input_event(dev, type, code, value);
+}
+EXPORT_SYMBOL(__compat_input_event);
+
 static unsigned int input_estimate_events_per_packet(struct input_dev *dev)
 {
 	struct __compat_input_dev *_dev = __input_to_compat(dev);
@@ -444,43 +484,3 @@ void input_set_mt(struct input_dev *dev, struct input_mt *mt)
 	if (_dev)
 		_dev->mt = mt;
 }
-
-/**
- * input_event() - report new input event
- * @dev: device that generated the event
- * @type: type of the event
- * @code: event code
- * @value: value of the event
- *
- * This function should be used by drivers implementing various input
- * devices to report input events. See also input_inject_event().
- *
- * NOTE: input_event() may be safely used right after input device was
- * allocated with input_allocate_device(), even before it is registered
- * with input_register_device(), but the event will not reach any of the
- * input handlers. Such early invocation of input_event() may be used
- * to 'seed' initial state of a switch or initial position of absolute
- * axis, etc.
- */
-void __compat_input_event(struct input_dev *dev,
-		 unsigned int type, unsigned int code, int value)
-{
-	struct __compat_input_dev *_dev;
-	unsigned long flags;
-	bool compat_called = 0;
-
-	if (!is_event_supported(type, dev->evbit, EV_MAX))
-		return;
-
-	spin_lock_irqsave(&dev->event_lock, flags);
-	_dev = __input_to_compat(dev);
-	if (_dev && _dev->vals) {
-		__compat_input_handle_event(dev, type, code, value);
-		compat_called = 1;
-	}
-	spin_unlock_irqrestore(&dev->event_lock, flags);
-
-	if (!compat_called)
-		input_event(dev, type, code, value);
-}
-EXPORT_SYMBOL(__compat_input_event);
