@@ -804,16 +804,6 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 
 	input_mt_init_slots(input, td->maxcontacts, td->mt_flags);
 
-	/**
-	 * compat:
-	 * - remove fuzz for emulated ABS_X/Y
-	 */
-	if (test_bit(ABS_X, input->absbit)) {
-		input_abs_set_fuzz(input, ABS_X, 0);
-		input_abs_set_fuzz(input, ABS_Y, 0);
-	}
-	/** end of compat */
-
 	td->mt_flags = 0;
 }
 
@@ -960,18 +950,6 @@ static void mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
 
 	if (hi->report->id == td->pen_report_id)
 		mt_pen_input_configured(hdev, hi);
-
-#ifndef HID_QUIRK_NO_EMPTY_INPUT
-	if (hi->report->id != td->pen_report_id &&
-	    hi->report->id != td->mt_report_id) {
-		char *name = kzalloc(strlen(hi->input->name) + 13, GFP_KERNEL);
-		if (name) {
-			sprintf(name, "%s (No Events)", hi->input->name);
-			mt_free_input_name(hi);
-			hi->input->name = name;
-		}
-	}
-#endif
 }
 
 static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
