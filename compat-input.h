@@ -74,6 +74,9 @@ struct __compat_input_dev {
 	unsigned int num_vals;
 	unsigned int max_vals;
 	struct input_value *vals;
+
+	/* private */
+	void *p;
 };
 
 static inline struct __compat_input_dev *__input_to_compat(struct input_dev *dev)

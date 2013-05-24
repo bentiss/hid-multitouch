@@ -249,6 +249,54 @@ static int last_variable_field(struct hid_field *field, struct hid_usage *usage)
 	return 1;
 }
 
+static bool hidinput_configure_usage(struct hid_input *hidinput, struct hid_field *field,
+				     struct hid_usage *usage)
+{
+	if (field->flags & HID_MAIN_ITEM_CONSTANT)
+		return 0;
+
+	/* only LED usages are supported in output fields */
+	if (field->report_type == HID_OUTPUT_REPORT &&
+			(usage->hid & HID_USAGE_PAGE) != HID_UP_LED) {
+		return 0;
+	}
+	return 1;
+}
+
+static struct hid_report *get_last_report(struct hid_device *hdev, struct hid_input *hi)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(hi->input);
+	struct hid_report *last_report = _dev->p;
+	struct hid_report *report;
+	int max_report_type = HID_OUTPUT_REPORT;
+	int i, j, k;
+
+	if (!last_report) {
+
+		if (hdev->quirks & HID_QUIRK_SKIP_OUTPUT_REPORTS)
+			max_report_type = HID_INPUT_REPORT;
+
+		for (k = HID_INPUT_REPORT; k <= max_report_type; k++)
+			list_for_each_entry(report, &hdev->report_enum[k].report_list, list) {
+				int count = 0;
+				if (!report->maxfield)
+					continue;
+
+				for (i = 0; i < report->maxfield; i++) {
+					for (j = 0; j < report->field[i]->maxusage; j++) {
+						 count += hidinput_configure_usage(hi, report->field[i],
+									 report->field[i]->usage + j);
+					}
+				}
+
+				if (count)
+					last_report = report;
+			}
+		_dev->p = last_report;
+	}
+	return last_report;
+}
+
 static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
 		unsigned long **bit, int *max)
@@ -256,6 +304,7 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	struct hid_driver *hdrv = hdev->driver;
 	struct __compat_hid_driver *c_hdrv = container_of(hdrv, struct __compat_hid_driver, hdrv);
 	unsigned usage_index = get_usage_index(field, usage);
+	struct hid_report *last_report;
 	int ret = 0;
 
 	if (!input_allocate_extra(hi->input))
@@ -265,10 +314,19 @@ static int __compat_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		ret = c_hdrv->input_mapping(hdev, hi, field, usage, bit, max,
 					    usage_index);
 
-	if (c_hdrv->input_configured && last_variable_field(field, usage)) {
-		hi->report = field->report;
-		c_hdrv->input_configured(hdev, hi);
-		input_allocate_extra(hi->input);
+	if (last_variable_field(field, usage)) {
+		last_report = get_last_report(hdev, hi);
+
+		if (c_hdrv->input_configured &&
+		    (field->report == last_report ||
+		     (hdev->quirks & HID_QUIRK_MULTI_INPUT))) {
+			hi->report = field->report;
+			c_hdrv->input_configured(hdev, hi);
+			input_allocate_extra(hi->input);
+		}
+
+		if (field->report == last_report)
+			input_allocate_extra(hi->input);
 	}
 
 	return ret;
