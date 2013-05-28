@@ -1,9 +1,9 @@
-MODULE_NAME := hid-multitouch
+MODULE_NAME := hid_mt_compat
 
-hid_mt_compat-y		:= $(MODULE_NAME).o
-hid_mt_compat-y		+= compat-hid.o
-hid_mt_compat-y		+= compat-mt.o
-hid_mt_compat-y		+= compat-input.o
+$(MODULE_NAME)-y	:= hid-multitouch.o
+$(MODULE_NAME)-y	+= compat-hid.o
+$(MODULE_NAME)-y	+= compat-mt.o
+$(MODULE_NAME)-y	+= compat-input.o
 
 obj-m			+= hid_mt_compat.o
 
