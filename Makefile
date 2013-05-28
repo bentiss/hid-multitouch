@@ -12,7 +12,7 @@ PWD := $(shell pwd)
 default:
 	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
 
-install: $(MODULE_NAME).ko
+install: $(MODULE_NAME).ko $(MODULE_NAME).mod.c
 	/bin/bash install.sh
 
 uninstall:

@@ -1,6 +1,8 @@
 #!/bin/bash
 
 MODULE_NAME=hid_mt_compat
+UDEV_RULE=/etc/udev/rules.d/41-hid-multitouch.rules
+BASH_LOADING_SCRIPT=/etc/udev/load_hid_multitouch.sh
 
 if [[ `id -u` != 0 ]]
 then
@@ -34,6 +36,18 @@ else
     echo "Keeping installed module" ${INSTALLED_TARGET}
     echo "  --> You may need to remove it manually if you know what you are doing."
   fi
+fi
+
+if [[ -e ${UDEV_RULE} ]]
+then
+  echo "removing udev rule" ${UDEV_RULE}
+  rm ${UDEV_RULE}
+fi
+
+if [[ -e ${BASH_LOADING_SCRIPT} ]]
+then
+  echo "removing udev script" ${BASH_LOADING_SCRIPT}
+  rm ${BASH_LOADING_SCRIPT}
 fi
 
 echo "depmod -a"
