@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MODULE_NAME=hid_mt_compat
+MODULE_NAMES="hid_compat hid_mt_compat uhid_compat usbhid_compat"
 UDEV_RULE=/etc/udev/rules.d/41-hid-multitouch.rules
 BASH_LOADING_SCRIPT=/etc/udev/load_hid_multitouch.sh
 
@@ -10,33 +10,19 @@ then
   exit 1
 fi
 
-WORKING_DIR=$(pwd)
-TARGET=${MODULE_NAME}.ko
+for MODULE_NAME in ${MODULE_NAMES}
+do
+  TARGET=${MODULE_NAME}.ko
 
-INSTALL_PATH=/lib/modules/`uname -r`/kernel/drivers/hid
-COMPILED_TARGET=${WORKING_DIR}/${TARGET}
-INSTALLED_TARGET=${INSTALL_PATH}/${TARGET}
+  INSTALL_PATH=/lib/modules/`uname -r`/extra
 
-if [[ -e ${INSTALLED_TARGET}.orig ]]
-then
-  echo "Restoring original module"
-  mv ${INSTALLED_TARGET}.orig ${INSTALLED_TARGET}
-else
-  if [[ -e ${COMPILED_TARGET} && -e ${INSTALLED_TARGET} ]]
+  INSTALLED_TARGET=`find ${INSTALL_PATH} -name ${TARGET}`
+  if [[ -e ${INSTALLED_TARGET} ]]
   then
-    if diff -q ${COMPILED_TARGET} ${INSTALLED_TARGET} > /dev/null ; then
-      # the file are equals, it is safe to remove it
-      echo "Removing installed module" ${INSTALLED_TARGET}
-      rm ${INSTALLED_TARGET}
-    else
-      echo "Keeping installed module" ${INSTALLED_TARGET}
-      echo "  --> You may need to remove it manually if you know what you are doing."
-    fi
-  else
-    echo "Keeping installed module" ${INSTALLED_TARGET}
-    echo "  --> You may need to remove it manually if you know what you are doing."
+    echo "Removing installed module" ${INSTALLED_TARGET}
+    rm ${INSTALLED_TARGET}
   fi
-fi
+done
 
 if [[ -e ${UDEV_RULE} ]]
 then

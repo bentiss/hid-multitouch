@@ -29,6 +29,7 @@ default:
 	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules
 
 install: $(MODULE_NAME).ko $(MODULE_NAME).mod.c
+	$(MAKE) -C $(KDIR) SUBDIRS=$(PWD) modules_install
 	/bin/bash install.sh
 
 uninstall:
