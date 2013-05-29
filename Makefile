@@ -19,7 +19,7 @@ ifdef CONFIG_DEBUG_FS
 endif
 
 obj-m		+= $(HID_MODULE_NAME).o
-obj-m		+= uhid.o
+obj-m		+= uhid_compat.o
 
 obj-m			+= usbhid/
 
