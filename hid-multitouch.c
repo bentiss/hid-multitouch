@@ -39,11 +39,11 @@
  */
 
 #include <linux/device.h>
-#include "compat-hid.h"
+#include <linux/hid.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
-#include "compat-mt.h"
+#include <linux/input/mt.h>
 #include <linux/string.h>
 
 
@@ -402,26 +402,12 @@ static int mt_pen_event(struct hid_device *hid, struct hid_field *field,
 	return 0;
 }
 
-/**
- * compat:
- * - pen use internal hid processing, so use internal input_sync (not compat).
- */
-#undef input_sync
-/** end of compat */
 static void mt_pen_report(struct hid_device *hid, struct hid_report *report)
 {
 	struct hid_field *field = report->field[0];
 
 	input_sync(field->hidinput->input);
 }
-/**
- * compat (following):
- * - pen use internal hid processing, so use internal input_sync (not compat).
- */
-#define input_sync(a) \
-	__compat_input_sync((a))
-/** end of compat */
-
 
 static void mt_pen_input_configured(struct hid_device *hdev,
 					struct hid_input *hi)
@@ -439,7 +425,7 @@ static void mt_pen_input_configured(struct hid_device *hdev,
 
 static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max, unsigned usage_index)
+		unsigned long **bit, int *max)
 {
 	struct mt_device *td = hid_get_drvdata(hdev);
 	struct mt_class *cls = &td->mtclass;
@@ -456,8 +442,8 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	    (usage->hid & HID_USAGE_PAGE) == HID_UP_BUTTON)
 		td->mt_flags |= INPUT_MT_POINTER;
 
-	if (usage_index)
-		prev_usage = &field->usage[usage_index - 1];
+	if (usage->usage_index)
+		prev_usage = &field->usage[usage->usage_index - 1];
 
 	switch (usage->hid & HID_USAGE_PAGE) {
 
@@ -548,7 +534,7 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 			return 1;
 		case HID_DG_CONTACTCOUNT:
 			td->cc_index = field->index;
-			td->cc_value_index = usage_index;
+			td->cc_value_index = usage->usage_index;
 			return 1;
 		case HID_DG_CONTACTMAX:
 			/* we don't set td->last_slot_field as contactcount and
@@ -618,7 +604,7 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 	if (td->curvalid || (td->mtclass.quirks & MT_QUIRK_ALWAYS_VALID)) {
 		int slotnum = mt_compute_slot(td, input);
 		struct mt_slot *s = &td->curdata;
-		struct input_mt *mt = input_get_mt(input); /** compat */
+		struct input_mt *mt = input->mt;
 
 		if (slotnum < 0 || slotnum >= td->maxcontacts)
 			return;
@@ -678,8 +664,7 @@ static int mt_touch_event(struct hid_device *hid, struct hid_field *field,
 }
 
 static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
-				struct hid_usage *usage, __s32 value,
-				unsigned usage_index)
+				struct hid_usage *usage, __s32 value)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
 	__s32 quirks = td->mtclass.quirks;
@@ -739,7 +724,7 @@ static void mt_process_mt_event(struct hid_device *hid, struct hid_field *field,
 			return;
 		}
 
-		if (usage_index + 1 == field->report_count) {
+		if (usage->usage_index + 1 == field->report_count) {
 			/* we only take into account the last report. */
 			if (usage->hid == td->last_slot_field)
 				mt_complete_slot(td, field->hidinput->input);
@@ -775,7 +760,7 @@ static void mt_touch_report(struct hid_device *hid, struct hid_report *report)
 
 		for (n = 0; n < count; n++)
 			mt_process_mt_event(hid, field, &field->usage[n],
-					field->value[n], n);
+					field->value[n]);
 	}
 
 	if (td->num_received >= td->num_expected)
@@ -809,7 +794,7 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 
 static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max, unsigned usage_index)
+		unsigned long **bit, int *max)
 {
 	/* Only map fields from TouchScreen or TouchPad collections.
 	* We need to ignore fields that belong to other collections
@@ -822,7 +807,7 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 	if (field->physical == HID_DG_STYLUS)
 		return mt_pen_input_mapping(hdev, hi, field, usage, bit, max);
 
-	return mt_touch_input_mapping(hdev, hi, field, usage, bit, max, usage_index);
+	return mt_touch_input_mapping(hdev, hi, field, usage, bit, max);
 }
 
 static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
@@ -969,9 +954,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	/* This allows the driver to correctly support devices
 	 * that emit events over several HID messages.
 	 */
-#ifdef HID_QUIRK_NO_INPUT_SYNC
 	hdev->quirks |= HID_QUIRK_NO_INPUT_SYNC;
-#endif
 
 	/*
 	 * This allows the driver to handle different input sensors
@@ -1008,7 +991,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	if (ret != 0)
 		goto fail;
 
-	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT | HID_CONNECT_HIDINPUT_FORCE);
+	ret = hid_hw_start(hdev, HID_CONNECT_DEFAULT);
 	if (ret)
 		goto hid_fail;
 
@@ -1392,7 +1375,7 @@ static const struct hid_usage_id mt_grabbed_usages[] = {
 	{ HID_ANY_ID - 1, HID_ANY_ID - 1, HID_ANY_ID - 1}
 };
 
-static struct __compat_hid_driver mt_driver = {
+static struct hid_driver mt_driver = {
 	.name = "hid-mt-compat",
 	.id_table = mt_devices,
 	.probe = mt_probe,

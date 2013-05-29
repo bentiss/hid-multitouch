@@ -44,7 +44,7 @@ rmmod ${MODULE_NAME} 2> /dev/null
 modprobe ${MODULE_NAME}
 
 grep MODULE_ALIAS hid_mt_compat.mod.c | \
-	sed 's/MODULE_ALIAS("hid:b\(.*\)v0000\(.*\)p0000\(.*\)");/KERNEL=="\1:\2:\3.*", DRIVER!="'${MODULE_NAME//_/-}'", RUN+="\/bin\/sh \/etc\/udev\/load_hid_multitouch.sh $driver %k"/' | \
+	sed 's/MODULE_ALIAS("hid:b.*v0000\(.*\)p0000\(.*\)");/DRIVER=="usbhid", ENV{MODALIAS}=="usb:v\1p\2d*", RUN+="\/bin\/sh \/etc\/udev\/load_hid_multitouch.sh usbhid %k"/' | \
 	grep -v MODULE_ALIAS | \
 	sort \
 		> ${UDEV_RULE}
@@ -56,11 +56,13 @@ DRIVER=\$1
 DEVICE=\$2
 
 HID_DRV_PATH=/sys/bus/hid/drivers
+USB_DRV_PATH=/sys/bus/usb/drivers
 
 HID_MULTITOUCH=hid-mt-compat
+USBHID=usbhid-compat
 
 /sbin/modprobe  \${HID_MULTITOUCH}
 
-echo \${DEVICE} > \${HID_DRV_PATH}/\${DRIVER}/unbind
-echo \${DEVICE} > \${HID_DRV_PATH}/\${HID_MULTITOUCH}/bind
+echo \${DEVICE} > \${USB_DRV_PATH}/\${DRIVER}/unbind
+echo \${DEVICE} > \${USB_DRV_PATH}/\${USBHID}/bind
 EOF
