@@ -508,7 +508,7 @@ int hidraw_connect(struct hid_device *hid)
 	}
 
 	dev->dev = device_create(hidraw_class, &hid->dev, MKDEV(hidraw_major, minor),
-				 NULL, "%s%d", "hidraw", minor);
+				 NULL, "%s%d", "hidraw-compat", minor);
 
 	if (IS_ERR(dev->dev)) {
 		hidraw_table[minor] = NULL;
