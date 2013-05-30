@@ -42,15 +42,6 @@
 #define hidinput_connect		LINUX_BACKPORT(hidinput_connect)
 #define hidinput_disconnect		LINUX_BACKPORT(hidinput_disconnect)
 
-#if 0
-/* use a define to avoid include chaining to get THIS_MODULE & friends */
-#define hid_register_driver(driver) \
-	__hid_register_driver(driver, THIS_MODULE, KBUILD_MODNAME)
-#define module_hid_driver(__hid_driver) \
-	module_driver(__hid_driver, hid_register_driver, \
-		      hid_unregister_driver)
-#endif
-
 #define hid_set_field			LINUX_BACKPORT(hid_set_field)
 #define hid_input_report		LINUX_BACKPORT(hid_input_report)
 #define hidinput_find_field		LINUX_BACKPORT(hidinput_find_field)
