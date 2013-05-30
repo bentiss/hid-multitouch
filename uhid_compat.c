@@ -22,7 +22,7 @@
 #include <linux/poll.h>
 #include <linux/sched.h>
 #include <linux/spinlock.h>
-#include <linux/uhid.h>
+#include <uapi/linux/uhid.h>
 #include <linux/wait.h>
 
 #define UHID_NAME	"uhid"
