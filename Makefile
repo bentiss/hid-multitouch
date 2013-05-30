@@ -3,8 +3,6 @@ MODULE_NAME := hid_mt_compat
 LINUXINCLUDE := -I$(PWD)/include $(LINUXINCLUDE)
 
 $(MODULE_NAME)-y	:= hid-multitouch.o
-$(MODULE_NAME)-y	+= compat-mt.o
-$(MODULE_NAME)-y	+= compat-input.o
 
 obj-m			+= $(MODULE_NAME).o
 
@@ -13,6 +11,8 @@ HID_MODULE_NAME := hid_compat
 $(HID_MODULE_NAME)-y	:= hid-core.o
 $(HID_MODULE_NAME)-y	+= hid-input.o
 $(HID_MODULE_NAME)-y	+= hidraw.o
+$(HID_MODULE_NAME)-y	+= compat-mt.o
+$(HID_MODULE_NAME)-y	+= compat-input.o
 
 ifdef CONFIG_DEBUG_FS
 	$(HID_MODULE_NAME)-objs		+= hid-debug.o
