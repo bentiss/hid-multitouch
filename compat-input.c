@@ -9,7 +9,7 @@
  * the Free Software Foundation.
  */
 
-#include "compat-input.h"
+#include <linux/compat-input.h>
 #include <linux/slab.h>
 #include <linux/module.h>
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 2, 0)
@@ -469,18 +469,3 @@ void input_free_extra(struct input_dev *dev)
 	spin_unlock_irqrestore(&dev->event_lock, flags);
 }
 EXPORT_SYMBOL_GPL(input_free_extra);
-
-struct input_mt *input_get_mt(struct input_dev *dev)
-{
-	struct __compat_input_dev *_dev = __input_to_compat(dev);
-	if (_dev)
-		return _dev->mt;
-	return NULL;
-}
-
-void input_set_mt(struct input_dev *dev, struct input_mt *mt)
-{
-	struct __compat_input_dev *_dev = __input_to_compat(dev);
-	if (_dev)
-		_dev->mt = mt;
-}

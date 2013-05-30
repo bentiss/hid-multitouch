@@ -13,7 +13,7 @@
 
 #include <linux/input.h>
 #include <linux/version.h>
-#include "compat-mt.h"
+#include <linux/input/compat-mt.h>
 
 #ifndef ABS_MT_SLOT
 #define ABS_MT_SLOT		0x2f	/* MT slot being modified */
@@ -45,6 +45,55 @@
 
 #ifndef BTN_TOOL_QUINTTAP
 #define BTN_TOOL_QUINTTAP	0x148	/* Five fingers on trackpad */
+#endif
+
+#ifndef KEY_IMAGES
+#define KEY_IMAGES		0x1ba	/* AL Image Browser */
+#endif
+
+#ifndef BTN_TRIGGER_HAPPY
+#define BTN_TRIGGER_HAPPY		0x2c0
+#define BTN_TRIGGER_HAPPY1		0x2c0
+#define BTN_TRIGGER_HAPPY2		0x2c1
+#define BTN_TRIGGER_HAPPY3		0x2c2
+#define BTN_TRIGGER_HAPPY4		0x2c3
+#define BTN_TRIGGER_HAPPY5		0x2c4
+#define BTN_TRIGGER_HAPPY6		0x2c5
+#define BTN_TRIGGER_HAPPY7		0x2c6
+#define BTN_TRIGGER_HAPPY8		0x2c7
+#define BTN_TRIGGER_HAPPY9		0x2c8
+#define BTN_TRIGGER_HAPPY10		0x2c9
+#define BTN_TRIGGER_HAPPY11		0x2ca
+#define BTN_TRIGGER_HAPPY12		0x2cb
+#define BTN_TRIGGER_HAPPY13		0x2cc
+#define BTN_TRIGGER_HAPPY14		0x2cd
+#define BTN_TRIGGER_HAPPY15		0x2ce
+#define BTN_TRIGGER_HAPPY16		0x2cf
+#define BTN_TRIGGER_HAPPY17		0x2d0
+#define BTN_TRIGGER_HAPPY18		0x2d1
+#define BTN_TRIGGER_HAPPY19		0x2d2
+#define BTN_TRIGGER_HAPPY20		0x2d3
+#define BTN_TRIGGER_HAPPY21		0x2d4
+#define BTN_TRIGGER_HAPPY22		0x2d5
+#define BTN_TRIGGER_HAPPY23		0x2d6
+#define BTN_TRIGGER_HAPPY24		0x2d7
+#define BTN_TRIGGER_HAPPY25		0x2d8
+#define BTN_TRIGGER_HAPPY26		0x2d9
+#define BTN_TRIGGER_HAPPY27		0x2da
+#define BTN_TRIGGER_HAPPY28		0x2db
+#define BTN_TRIGGER_HAPPY29		0x2dc
+#define BTN_TRIGGER_HAPPY30		0x2dd
+#define BTN_TRIGGER_HAPPY31		0x2de
+#define BTN_TRIGGER_HAPPY32		0x2df
+#define BTN_TRIGGER_HAPPY33		0x2e0
+#define BTN_TRIGGER_HAPPY34		0x2e1
+#define BTN_TRIGGER_HAPPY35		0x2e2
+#define BTN_TRIGGER_HAPPY36		0x2e3
+#define BTN_TRIGGER_HAPPY37		0x2e4
+#define BTN_TRIGGER_HAPPY38		0x2e5
+#define BTN_TRIGGER_HAPPY39		0x2e6
+#define BTN_TRIGGER_HAPPY40		0x2e7
+
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0)
@@ -87,8 +136,20 @@ static inline struct __compat_input_dev *__input_to_compat(struct input_dev *dev
 
 struct __compat_input_dev *input_allocate_extra(struct input_dev *dev);
 void input_free_extra(struct input_dev *dev);
-struct input_mt *input_get_mt(struct input_dev *dev);
-void input_set_mt(struct input_dev *dev, struct input_mt *mt);
+static inline struct input_mt *input_get_mt(struct input_dev *dev)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	if (_dev)
+		return _dev->mt;
+	return NULL;
+}
+
+static inline void input_set_mt(struct input_dev *dev, struct input_mt *mt)
+{
+	struct __compat_input_dev *_dev = __input_to_compat(dev);
+	if (_dev)
+		_dev->mt = mt;
+}
 
 /**
  * input_event() - report new input event

@@ -12,7 +12,7 @@
  * the Free Software Foundation.
  */
 
-#include "compat-input.h"
+#include <linux/compat-input.h>
 
 #define TRKID_MAX	0xffff
 
