@@ -33,7 +33,7 @@
 #include <linux/mod_devicetable.h> /* hid_device_id */
 #include <linux/timer.h>
 #include <linux/workqueue.h>
-#include <linux/input.h>
+#include <linux/compat-input.h>
 #include <linux/semaphore.h>
 #include <linux/power_supply.h>
 #include <uapi/linux/hid.h>

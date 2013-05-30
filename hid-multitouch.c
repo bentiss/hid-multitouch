@@ -43,7 +43,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
-#include <linux/input/mt.h>
+#include <linux/input/compat-mt.h>
 #include <linux/string.h>
 
 
@@ -604,7 +604,7 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 	if (td->curvalid || (td->mtclass.quirks & MT_QUIRK_ALWAYS_VALID)) {
 		int slotnum = mt_compute_slot(td, input);
 		struct mt_slot *s = &td->curdata;
-		struct input_mt *mt = input->mt;
+		struct input_mt *mt = input_get_mt(input); /** compat */
 
 		if (slotnum < 0 || slotnum >= td->maxcontacts)
 			return;
@@ -787,7 +787,19 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 	if (cls->quirks & MT_QUIRK_NOT_SEEN_MEANS_UP)
 		td->mt_flags |= INPUT_MT_DROP_UNUSED;
 
+	/**
+	 * compat:
+	 * - allocate extra struct for multitouch
+	 */
+	input_allocate_extra(input);
+	/** end of compat */
 	input_mt_init_slots(input, td->maxcontacts, td->mt_flags);
+	/**
+	 * compat:
+	 * - allocate extra struct for multitouch
+	 */
+	input_allocate_extra(input);
+	/** end of compat */
 
 	td->mt_flags = 0;
 }
