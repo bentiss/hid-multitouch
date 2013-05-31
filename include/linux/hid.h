@@ -284,6 +284,9 @@ struct hid_item {
 #define HID_QUIRK_MULTI_INPUT			0x00000040
 #define HID_QUIRK_HIDINPUT_FORCE		0x00000080
 #define HID_QUIRK_NO_EMPTY_INPUT		0x00000100
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
+#define HID_QUIRK_MULTITOUCH			0x00001000
+#endif
 #define HID_QUIRK_SKIP_OUTPUT_REPORTS		0x00010000
 #define HID_QUIRK_FULLSPEED_INTERVAL		0x10000000
 #define HID_QUIRK_NO_INIT_REPORTS		0x20000000
@@ -558,8 +561,13 @@ struct hid_descriptor {
 	struct hid_class_descriptor desc[1];
 } __attribute__ ((packed));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 #define HID_DEVICE(b, g, ven, prod)					\
 	.bus = (b), .group = (g), .vendor = (ven), .product = (prod)
+#else
+#define HID_DEVICE(b, g, ven, prod)					\
+	.bus = (b), .vendor = (ven), .product = (prod)
+#endif
 #define HID_USB_DEVICE(ven, prod)				\
 	.bus = BUS_USB, .vendor = (ven), .product = (prod)
 #define HID_BLUETOOTH_DEVICE(ven, prod)					\
