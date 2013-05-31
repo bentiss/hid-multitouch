@@ -60,6 +60,10 @@ static inline struct inode *file_inode(struct file *f)
 }
 #endif
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
+#define usb_alloc_coherent usb_buffer_alloc
+#endif
+
 /**
  * general hid functions
  */
