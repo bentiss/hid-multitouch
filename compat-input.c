@@ -16,7 +16,7 @@
 #include <linux/export.h>
 #endif
 #include <linux/version.h>
-#include <linux/input/compat-mt.h>
+#include <linux/input/mt.h>
 
 static const struct input_value input_value_sync = { EV_SYN, SYN_REPORT, 1 };
 

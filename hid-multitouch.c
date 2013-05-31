@@ -43,7 +43,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/usb.h>
-#include <linux/input/compat-mt.h>
+#include <linux/input/mt.h>
 #include <linux/string.h>
 
 
