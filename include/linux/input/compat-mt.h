@@ -12,6 +12,17 @@
  * the Free Software Foundation.
  */
 
+#include <linux/backport.h>
+
+#define input_mt_init_slots			LINUX_BACKPORT(input_mt_init_slots)
+#define input_mt_destroy_slots			LINUX_BACKPORT(input_mt_destroy_slots)
+#define input_mt_report_slot_state		LINUX_BACKPORT(input_mt_report_slot_state)
+#define input_mt_report_finger_count		LINUX_BACKPORT(input_mt_report_finger_count)
+#define input_mt_report_pointer_emulation	LINUX_BACKPORT(input_mt_report_pointer_emulation)
+#define input_mt_sync_frame			LINUX_BACKPORT(input_mt_sync_frame)
+#define input_mt_assign_slots			LINUX_BACKPORT(input_mt_assign_slots)
+#define input_mt_get_slot_by_key		LINUX_BACKPORT(input_mt_get_slot_by_key)
+
 #include <linux/compat-input.h>
 
 #define TRKID_MAX	0xffff
@@ -77,9 +88,9 @@ static inline bool input_mt_is_used(const struct input_mt *mt,
 	return slot->frame == mt->frame;
 }
 
-int __compat_input_mt_init_slots(struct input_dev *dev,
-			unsigned int num_slots, unsigned int flags);
-void __compat_input_mt_destroy_slots(struct input_dev *dev);
+int input_mt_init_slots(struct input_dev *dev, unsigned int num_slots,
+			unsigned int flags);
+void input_mt_destroy_slots(struct input_dev *dev);
 
 static inline int input_mt_new_trkid(struct input_mt *mt)
 {
@@ -101,14 +112,13 @@ static inline bool input_is_mt_axis(int axis)
 	return axis == ABS_MT_SLOT || input_is_mt_value(axis);
 }
 
-void __compat_input_mt_report_slot_state(struct input_dev *dev,
+void input_mt_report_slot_state(struct input_dev *dev,
 				unsigned int tool_type, bool active);
 
-void __compat_input_mt_report_finger_count(struct input_dev *dev, int count);
-void __compat_input_mt_report_pointer_emulation(struct input_dev *dev,
-				       bool use_count);
+void input_mt_report_finger_count(struct input_dev *dev, int count);
+void input_mt_report_pointer_emulation(struct input_dev *dev, bool use_count);
 
-void __compat_input_mt_sync_frame(struct input_dev *dev);
+void input_mt_sync_frame(struct input_dev *dev);
 
 /**
  * struct input_mt_pos - contact position
@@ -119,26 +129,9 @@ struct input_mt_pos {
 	s16 x, y;
 };
 
-int __compat_input_mt_assign_slots(struct input_dev *dev, int *slots,
+int input_mt_assign_slots(struct input_dev *dev, int *slots,
 			  const struct input_mt_pos *pos, int num_pos);
 
-int __compat_input_mt_get_slot_by_key(struct input_dev *dev, int key);
-
-#define input_mt_init_slots(a, b, c) \
-	__compat_input_mt_init_slots((a), (b), (c))
-#define input_mt_destroy_slots(a) \
-	__compat_input_mt_destroy_slots((a))
-#define input_mt_report_slot_state(a, b, c) \
-	__compat_input_mt_report_slot_state((a), (b), (c))
-#define input_mt_report_finger_count(a, b) \
-	__compat_input_mt_report_finger_count((a), (b))
-#define input_mt_report_pointer_emulation(a, b, c) \
-	__compat_input_mt_report_pointer_emulation((a), (b), (c))
-#define input_mt_sync_frame(a) \
-	__compat_input_mt_sync_frame((a))
-#define input_mt_assign_slots(a, b, c, d) \
-	__compat_input_mt_assign_slots((a), (b), (c), (d))
-#define input_mt_get_slot_by_key(a, b) \
-	__compat_input_mt_get_slot_by_key((a), (b))
+int input_mt_get_slot_by_key(struct input_dev *dev, int key);
 
 #endif

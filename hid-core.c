@@ -25,7 +25,7 @@
 #include <linux/spinlock.h>
 #include <asm/unaligned.h>
 #include <asm/byteorder.h>
-#include <linux/compat-input.h>
+#include <linux/input.h>
 #include <linux/wait.h>
 #include <linux/vmalloc.h>
 #include <linux/sched.h>

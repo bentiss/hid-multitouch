@@ -16,10 +16,7 @@
 #include <linux/export.h>
 #endif
 #include <linux/version.h>
-
-/* undefine the compat emulation in case we need the real ones */
-#undef input_sync
-#undef input_event
+#include <linux/input/compat-mt.h>
 
 static const struct input_value input_value_sync = { EV_SYN, SYN_REPORT, 1 };
 
@@ -305,7 +302,7 @@ static int input_get_disposition(struct input_dev *dev,
 	return disposition;
 }
 
-static void __compat_input_handle_event(struct input_dev *dev,
+static void input_handle_event(struct input_dev *dev,
 			       unsigned int type, unsigned int code, int value)
 {
 	int disposition;
@@ -364,28 +361,71 @@ static void __compat_input_handle_event(struct input_dev *dev,
  * to 'seed' initial state of a switch or initial position of absolute
  * axis, etc.
  */
-void __compat_input_event(struct input_dev *dev,
+void input_event(struct input_dev *dev,
 		 unsigned int type, unsigned int code, int value)
 {
-	struct __compat_input_dev *_dev;
 	unsigned long flags;
-	bool compat_called = 0;
 
-	if (!is_event_supported(type, dev->evbit, EV_MAX))
-		return;
+	if (is_event_supported(type, dev->evbit, EV_MAX)) {
 
-	spin_lock_irqsave(&dev->event_lock, flags);
-	_dev = __input_to_compat(dev);
-	if (_dev && _dev->vals) {
-		__compat_input_handle_event(dev, type, code, value);
-		compat_called = 1;
+		spin_lock_irqsave(&dev->event_lock, flags);
+		input_handle_event(dev, type, code, value);
+		spin_unlock_irqrestore(&dev->event_lock, flags);
 	}
-	spin_unlock_irqrestore(&dev->event_lock, flags);
-
-	if (!compat_called)
-		input_event(dev, type, code, value);
 }
-EXPORT_SYMBOL(__compat_input_event);
+EXPORT_SYMBOL(input_event);
+
+/**
+ * compat:
+ * - rely on internal input module, so undefine and declare the internal
+ *   function we will need later.
+ */
+#undef input_allocate_device
+#undef input_register_device
+#undef input_unregister_device
+struct input_dev *input_allocate_device(void);
+int input_register_device(struct input_dev *dev);
+void input_unregister_device(struct input_dev *dev);
+
+/**
+ * input_allocate_device - allocate memory for new input device
+ *
+ * Returns prepared struct input_dev or %NULL.
+ *
+ * NOTE: Use input_free_device() to free devices that have not been
+ * registered; input_unregister_device() should be used for already
+ * registered devices.
+ */
+struct input_dev *compat_input_allocate_device(void)
+{
+	struct __compat_input_dev *_dev;
+	struct input_dev *dev = NULL;
+	struct input_dev *internal_dev;
+
+	internal_dev = input_allocate_device();
+
+	if (!internal_dev)
+		return dev;
+
+	_dev = kzalloc(sizeof(struct __compat_input_dev), GFP_KERNEL);
+	if (_dev) {
+		dev = &_dev->input;
+		dev->dev.type = internal_dev->dev.type;
+		dev->dev.class = &input_class;
+		device_initialize(&dev->dev);
+		mutex_init(&dev->mutex);
+		spin_lock_init(&dev->event_lock);
+		INIT_LIST_HEAD(&dev->h_list);
+		INIT_LIST_HEAD(&dev->node);
+
+/** compat: comment out __module_get(THIS_MODULE); */
+	}
+
+	input_free_device(internal_dev);
+
+	return dev;
+}
+EXPORT_SYMBOL(compat_input_allocate_device);
 
 static unsigned int input_estimate_events_per_packet(struct input_dev *dev)
 {
@@ -428,44 +468,55 @@ static unsigned int input_estimate_events_per_packet(struct input_dev *dev)
 	return events;
 }
 
-static struct __compat_input_dev *__do_input_allocate_extra(struct input_dev *dev)
+/**
+ * input_register_device - register device with input core
+ * @dev: device to be registered
+ *
+ * This function registers device with input core. The device must be
+ * allocated with input_allocate_device() and all it's capabilities
+ * set up before registering.
+ * If function fails the device must be freed with input_free_device().
+ * Once device has been successfully registered it can be unregistered
+ * with input_unregister_device(); input_free_device() should not be
+ * called in this case.
+ *
+ * Note that this function is also used to register managed input devices
+ * (ones allocated with devm_input_allocate_device()). Such managed input
+ * devices need not be explicitly unregistered or freed, their tear down
+ * is controlled by the devres infrastructure. It is also worth noting
+ * that tear down of managed input devices is internally a 2-step process:
+ * registered managed input device is first unregistered, but stays in
+ * memory and can still handle input_event() calls (although events will
+ * not be delivered anywhere). The freeing of managed input device will
+ * happen later, when devres stack is unwound to the point where device
+ * allocation was made.
+ */
+int compat_input_register_device(struct input_dev *dev)
 {
 	struct __compat_input_dev *extra = __input_to_compat(dev);
 
-	if (extra && !extra->vals && extra->mt) {
+	if (extra && !extra->vals) {
 		extra->max_vals = input_estimate_events_per_packet(dev) + 2;
 		extra->vals = kcalloc(extra->max_vals, sizeof(*extra->vals),
 					GFP_KERNEL);
 	}
-	return extra;
+	return input_register_device(dev);
 }
+EXPORT_SYMBOL(compat_input_register_device);
 
-struct __compat_input_dev *input_allocate_extra(struct input_dev *dev)
+/**
+ * input_unregister_device - unregister previously registered device
+ * @dev: device to be unregistered
+ *
+ * This function unregisters an input device. Once device is unregistered
+ * the caller should not try to access it as it may get freed at any moment.
+ */
+void compat_input_unregister_device(struct input_dev *dev)
 {
-	struct __compat_input_dev *extra;
-
-	if (__input_to_compat(dev))
-		return __do_input_allocate_extra(dev);
-
-	extra = kzalloc(sizeof(struct __compat_input_dev), GFP_KERNEL);
-	if (extra)
-		dev->dev.platform_data = extra;
-
-	return __do_input_allocate_extra(dev);
+	struct __compat_input_dev *extra = __input_to_compat(dev);
+	struct input_value *vals = extra->vals;
+	input_mt_destroy_slots(dev);
+	input_unregister_device(dev);
+	kfree(vals);
 }
-EXPORT_SYMBOL_GPL(input_allocate_extra);
-
-void input_free_extra(struct input_dev *dev)
-{
-	struct __compat_input_dev *_dev = __input_to_compat(dev);
-	unsigned long flags;
-
-	if (!_dev)
-		return;
-
-	spin_lock_irqsave(&dev->event_lock, flags);
-	kfree(_dev);
-	dev->dev.platform_data = NULL;
-	spin_unlock_irqrestore(&dev->event_lock, flags);
-}
-EXPORT_SYMBOL_GPL(input_free_extra);
+EXPORT_SYMBOL(compat_input_unregister_device);

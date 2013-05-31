@@ -25,7 +25,8 @@
 #ifndef __COMPAT_HID_H
 #define __COMPAT_HID_H
 
-#define LINUX_BACKPORT(__sym) compat_ ##__sym
+#include <linux/version.h>
+#include <linux/backport.h>
 
 /**
  * general hid functions

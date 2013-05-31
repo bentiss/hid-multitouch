@@ -11,9 +11,15 @@
 #ifndef _COMPAT_INPUT_H
 #define _COMPAT_INPUT_H
 
+#include <linux/backport.h>
+
+#define input_allocate_device		LINUX_BACKPORT(input_allocate_device)
+#define input_register_device		LINUX_BACKPORT(input_register_device)
+#define input_unregister_device		LINUX_BACKPORT(input_unregister_device)
+#define input_event			LINUX_BACKPORT(input_event)
+
 #include <linux/input.h>
 #include <linux/version.h>
-#include <linux/input/compat-mt.h>
 
 #ifndef ABS_MT_SLOT
 #define ABS_MT_SLOT		0x2f	/* MT slot being modified */
@@ -112,12 +118,14 @@ struct input_value {
 
 /**
  * struct __compat_input_dev - represents an input device
+ * @input: placeholder of the input_dev
  * @mt: pointer to multitouch state
  * @num_vals: number of values queued in the current frame
  * @max_vals: maximum number of values queued in a frame
  * @vals: array of values queued in the current frame
  */
 struct __compat_input_dev {
+	struct input_dev input;
 	struct input_mt *mt;
 
 	unsigned int num_vals;
@@ -131,11 +139,9 @@ struct __compat_input_dev {
 
 static inline struct __compat_input_dev *__input_to_compat(struct input_dev *dev)
 {
-	return (struct __compat_input_dev *)dev->dev.platform_data;
+	return container_of(dev, struct __compat_input_dev, input);
 }
 
-struct __compat_input_dev *input_allocate_extra(struct input_dev *dev);
-void input_free_extra(struct input_dev *dev);
 static inline struct input_mt *input_get_mt(struct input_dev *dev)
 {
 	struct __compat_input_dev *_dev = __input_to_compat(dev);
@@ -150,37 +156,6 @@ static inline void input_set_mt(struct input_dev *dev, struct input_mt *mt)
 	if (_dev)
 		_dev->mt = mt;
 }
-
-/**
- * input_event() - report new input event
- * @dev: device that generated the event
- * @mt: mt slots definition
- * @type: type of the event
- * @code: event code
- * @value: value of the event
- *
- * This function should be used by drivers implementing various input
- * devices to report input events. See also input_inject_event().
- *
- * NOTE: input_event() may be safely used right after input device was
- * allocated with input_allocate_device(), even before it is registered
- * with input_register_device(), but the event will not reach any of the
- * input handlers. Such early invocation of input_event() may be used
- * to 'seed' initial state of a switch or initial position of absolute
- * axis, etc.
- */
-void __compat_input_event(struct input_dev *dev,
-		 unsigned int type, unsigned int code, int value);
-
-static inline void __compat_input_sync(struct input_dev *dev)
-{
-	__compat_input_event(dev, EV_SYN, SYN_REPORT, 0);
-}
-
-#define input_event(a, b, c, d) \
-	__compat_input_event((a), (b), (c), (d))
-#define input_sync(a) \
-	__compat_input_sync((a))
 
 #ifndef kstrtoul
 #define kstrtoul strict_strtoul

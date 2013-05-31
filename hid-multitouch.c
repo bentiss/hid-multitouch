@@ -787,19 +787,7 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 	if (cls->quirks & MT_QUIRK_NOT_SEEN_MEANS_UP)
 		td->mt_flags |= INPUT_MT_DROP_UNUSED;
 
-	/**
-	 * compat:
-	 * - allocate extra struct for multitouch
-	 */
-	input_allocate_extra(input);
-	/** end of compat */
 	input_mt_init_slots(input, td->maxcontacts, td->mt_flags);
-	/**
-	 * compat:
-	 * - allocate extra struct for multitouch
-	 */
-	input_allocate_extra(input);
-	/** end of compat */
 
 	td->mt_flags = 0;
 }
