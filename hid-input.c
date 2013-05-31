@@ -70,6 +70,7 @@ static const struct {
 #define map_key_clear(c)	hid_map_usage_clear(hidinput, usage, &bit, \
 		&max, EV_KEY, (c))
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 37)
 static bool match_scancode(struct hid_usage *usage,
 			   unsigned int cur_idx, unsigned int scancode)
 {
@@ -191,6 +192,169 @@ static int hidinput_setkeycode(struct input_dev *dev,
 
 	return -EINVAL;
 }
+#else
+#  if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 35)
+static inline int match_scancode(unsigned int code, unsigned int scancode)
+{
+	if (scancode == 0)
+		return 1;
+
+	return (code & (HID_USAGE_PAGE | HID_USAGE)) == scancode;
+}
+
+static inline int match_keycode(unsigned int code, unsigned int keycode)
+{
+	if (keycode == 0)
+		return 1;
+
+	return code == keycode;
+}
+
+static struct hid_usage *hidinput_find_key(struct hid_device *hid,
+					   unsigned int scancode,
+					   unsigned int keycode)
+{
+	int i, j, k;
+	struct hid_report *report;
+	struct hid_usage *usage;
+
+	for (k = HID_INPUT_REPORT; k <= HID_OUTPUT_REPORT; k++) {
+		list_for_each_entry(report, &hid->report_enum[k].report_list, list) {
+			for (i = 0; i < report->maxfield; i++) {
+				for ( j = 0; j < report->field[i]->maxusage; j++) {
+					usage = report->field[i]->usage + j;
+					if (usage->type == EV_KEY &&
+						match_scancode(usage->hid, scancode) &&
+						match_keycode(usage->code, keycode))
+						return usage;
+				}
+			}
+		}
+	}
+	return NULL;
+}
+
+static int hidinput_getkeycode(struct input_dev *dev,
+			       unsigned int scancode, unsigned int *keycode)
+{
+	struct hid_device *hid = input_get_drvdata(dev);
+	struct hid_usage *usage;
+
+	usage = hidinput_find_key(hid, scancode, 0);
+	if (usage) {
+		*keycode = usage->code;
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int hidinput_setkeycode(struct input_dev *dev,
+			       unsigned int scancode, unsigned int keycode)
+{
+	struct hid_device *hid = input_get_drvdata(dev);
+	struct hid_usage *usage;
+	int old_keycode;
+
+	usage = hidinput_find_key(hid, scancode, 0);
+	if (usage) {
+		old_keycode = usage->code;
+		usage->code = keycode;
+
+		clear_bit(old_keycode, dev->keybit);
+		set_bit(usage->code, dev->keybit);
+		dbg_hid(KERN_DEBUG "Assigned keycode %d to HID usage code %x\n", keycode, scancode);
+		/* Set the keybit for the old keycode if the old keycode is used
+		 * by another key */
+		if (hidinput_find_key (hid, 0, old_keycode))
+			set_bit(old_keycode, dev->keybit);
+
+		return 0;
+	}
+
+	return -EINVAL;
+}
+#  else
+static inline int match_scancode(int code, int scancode)
+{
+	if (scancode == 0)
+		return 1;
+	return ((code & (HID_USAGE_PAGE | HID_USAGE)) == scancode);
+}
+
+static inline int match_keycode(int code, int keycode)
+{
+	if (keycode == 0)
+		return 1;
+	return (code == keycode);
+}
+
+static struct hid_usage *hidinput_find_key(struct hid_device *hid,
+		int scancode, int keycode)
+{
+	int i, j, k;
+	struct hid_report *report;
+	struct hid_usage *usage;
+
+	for (k = HID_INPUT_REPORT; k <= HID_OUTPUT_REPORT; k++) {
+		list_for_each_entry(report, &hid->report_enum[k].report_list, list) {
+			for (i = 0; i < report->maxfield; i++) {
+				for ( j = 0; j < report->field[i]->maxusage; j++) {
+					usage = report->field[i]->usage + j;
+					if (usage->type == EV_KEY &&
+						match_scancode(usage->hid, scancode) &&
+						match_keycode(usage->code, keycode))
+						return usage;
+				}
+			}
+		}
+	}
+	return NULL;
+}
+
+static int hidinput_getkeycode(struct input_dev *dev, int scancode,
+				int *keycode)
+{
+	struct hid_device *hid = input_get_drvdata(dev);
+	struct hid_usage *usage;
+
+	usage = hidinput_find_key(hid, scancode, 0);
+	if (usage) {
+		*keycode = usage->code;
+		return 0;
+	}
+	return -EINVAL;
+}
+
+static int hidinput_setkeycode(struct input_dev *dev, int scancode,
+				int keycode)
+{
+	struct hid_device *hid = input_get_drvdata(dev);
+	struct hid_usage *usage;
+	int old_keycode;
+
+	if (keycode < 0 || keycode > KEY_MAX)
+		return -EINVAL;
+
+	usage = hidinput_find_key(hid, scancode, 0);
+	if (usage) {
+		old_keycode = usage->code;
+		usage->code = keycode;
+
+		clear_bit(old_keycode, dev->keybit);
+		set_bit(usage->code, dev->keybit);
+		dbg_hid(KERN_DEBUG "Assigned keycode %d to HID usage code %x\n", keycode, scancode);
+		/* Set the keybit for the old keycode if the old keycode is used
+		 * by another key */
+		if (hidinput_find_key (hid, 0, old_keycode))
+			set_bit(old_keycode, dev->keybit);
+
+		return 0;
+	}
+
+	return -EINVAL;
+}
+#  endif
+#endif
 
 /**
  * hidinput_calc_abs_res - calculate an absolute axis resolution
@@ -932,9 +1096,11 @@ mapped:
 		input_abs_set_res(input, usage->code,
 				  hidinput_calc_abs_res(field, usage->code));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 		/* use a larger default input buffer for MT devices */
 		if (usage->code == ABS_MT_POSITION_X && input->hint_events_per_packet == 0)
 			input_set_events_per_packet(input, 60);
+#endif
 	}
 
 	if (usage->type == EV_ABS &&
@@ -1181,8 +1347,13 @@ static struct hid_input *hidinput_allocate(struct hid_device *hid)
 	input_dev->event = hid->ll_driver->hidinput_input_event;
 	input_dev->open = hidinput_open;
 	input_dev->close = hidinput_close;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 37) || LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 39)
 	input_dev->setkeycode = hidinput_setkeycode;
 	input_dev->getkeycode = hidinput_getkeycode;
+#else
+	input_dev->setkeycode_new = hidinput_setkeycode;
+	input_dev->getkeycode_new = hidinput_getkeycode;
+#endif
 
 	input_dev->name = hid->name;
 	input_dev->phys = hid->phys;

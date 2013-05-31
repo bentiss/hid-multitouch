@@ -64,6 +64,11 @@ static inline struct inode *file_inode(struct file *f)
 #define usb_alloc_coherent usb_buffer_alloc
 #endif
 
+#ifndef HID_BUS_ANY
+#define HID_BUS_ANY				0xffff
+#define HID_GROUP_ANY				0x0000
+#endif
+
 /**
  * general hid functions
  */
