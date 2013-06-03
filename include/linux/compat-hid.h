@@ -109,7 +109,9 @@ static inline struct inode *file_inode(struct file *f)
 #define usbhid_quirks_exit		LINUX_BACKPORT(usbhid_quirks_exit)
 #define usbhid_set_leds			LINUX_BACKPORT(usbhid_set_leds)
 
+#ifdef CONFIG_HID_PID
 #define hid_pidff_init			LINUX_BACKPORT(hid_pidff_init)
+#endif
 
 /**
  * hid-debug functions

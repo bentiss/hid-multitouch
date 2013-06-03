@@ -10,7 +10,7 @@ HID_MODULE_NAME := hid_compat
 
 $(HID_MODULE_NAME)-y	:= hid-core.o
 $(HID_MODULE_NAME)-y	+= hid-input.o
-$(HID_MODULE_NAME)-y	+= hidraw.o
+$(HID_MODULE_NAME)-$(CONFIG_HIDRAW)	+= hidraw.o
 $(HID_MODULE_NAME)-y	+= compat-mt.o
 $(HID_MODULE_NAME)-y	+= compat-input.o
 
