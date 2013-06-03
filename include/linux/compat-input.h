@@ -34,10 +34,6 @@
 #define ABS_MT_BLOB_ID		0x38	/* Group a set of packets as a blob */
 #define ABS_MT_TRACKING_ID	0x39	/* Unique ID of initiated contact */
 #define ABS_MT_PRESSURE		0x3a	/* Pressure on contact area */
-
-/* Implementation details, userspace should not care about these */
-#define ABS_MT_FIRST		ABS_MT_TOUCH_MAJOR
-#define ABS_MT_LAST		ABS_MT_TOOL_Y
 #endif
 
 #ifndef ABS_MT_DISTANCE
@@ -48,6 +44,16 @@
 #define ABS_MT_TOOL_X		0x3c	/* Center X tool position */
 #define ABS_MT_TOOL_Y		0x3d	/* Center Y tool position */
 #endif
+
+/* Implementation details, userspace should not care about these */
+#ifdef ABS_MT_FIRST
+#undef ABS_MT_FIRST
+#endif
+#define ABS_MT_FIRST		ABS_MT_TOUCH_MAJOR
+#ifdef ABS_MT_LAST
+#undef ABS_MT_LAST
+#endif
+#define ABS_MT_LAST		ABS_MT_TOOL_Y
 
 #ifndef BTN_TOOL_QUINTTAP
 #define BTN_TOOL_QUINTTAP	0x148	/* Five fingers on trackpad */
