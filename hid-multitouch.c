@@ -1364,6 +1364,27 @@ static const struct hid_device_id mt_devices[] = {
 		MT_USB_DEVICE(USB_VENDOR_ID_ZYTRONIC,
 			USB_DEVICE_ID_ZYTRONIC_ZXY100) },
 
+	/* Not registered upstream panels, but tested and working ones */
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x03EB, 0x201C) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x03EB, 0x8409) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x046D, 0xB00A) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x04DD, 0x9681) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x04F3, 0x000A) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x04F3, 0x0732) },
+	{ .driver_data = MT_CLS_DEFAULT, HID_DEVICE(BUS_I2C, HID_GROUP_MULTITOUCH, 0x04F3,0x200A) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x0EEF, 0x790A) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1870, 0x0100) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1B96, 0x0C01) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1B96, 0x0F00) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1B96, 0x1000) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x2149, 0x230A) },
+	{ .driver_data = MT_CLS_SERIAL, MT_USB_DEVICE(0x238F, 0x0001) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x23C9, 0x5666) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x2512, 0x5003) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x25AA, 0x8883) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x2619, 0x5610) },
+
+
 	/* Generic MT device */
 	{ HID_DEVICE(HID_BUS_ANY, HID_GROUP_MULTITOUCH, HID_ANY_ID, HID_ANY_ID) },
 	{ }
