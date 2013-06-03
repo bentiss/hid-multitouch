@@ -567,7 +567,7 @@ static void __usbhid_submit_report(struct hid_device *hid, struct hid_report *re
 	}
 }
 
-void usbhid_submit_report(struct hid_device *hid, struct hid_report *report, unsigned char dir)
+static void usbhid_submit_report(struct hid_device *hid, struct hid_report *report, unsigned char dir)
 {
 	struct usbhid_device *usbhid = hid->driver_data;
 	unsigned long flags;
@@ -576,7 +576,6 @@ void usbhid_submit_report(struct hid_device *hid, struct hid_report *report, uns
 	__usbhid_submit_report(hid, report, dir);
 	spin_unlock_irqrestore(&usbhid->lock, flags);
 }
-EXPORT_SYMBOL_GPL(usbhid_submit_report);
 
 static int usb_hidinput_input_event(struct input_dev *dev, unsigned int type, unsigned int code, int value)
 {
@@ -612,7 +611,7 @@ static int usb_hidinput_input_event(struct input_dev *dev, unsigned int type, un
 	return 0;
 }
 
-int usbhid_wait_io(struct hid_device *hid)
+static int usbhid_wait_io(struct hid_device *hid)
 {
 	struct usbhid_device *usbhid = hid->driver_data;
 
