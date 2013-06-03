@@ -17,6 +17,7 @@
 #endif
 #include <linux/version.h>
 #include <linux/input/mt.h>
+#include <linux/random.h>
 
 static const struct input_value input_value_sync = { EV_SYN, SYN_REPORT, 1 };
 
@@ -124,7 +125,7 @@ static void input_pass_values(struct input_dev *dev,
 
 	rcu_read_unlock();
 
-/** compat:	drop: add_input_randomness(vals->type, vals->code, vals->value); */
+	add_input_randomness(vals->type, vals->code, vals->value);
 
 	/* trigger auto repeat for key events */
 	for (v = vals; v != vals + count; v++) {
