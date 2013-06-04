@@ -333,6 +333,7 @@ static void input_handle_event(struct input_dev *dev,
 		v->value = value;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 7, 0)
 	if (disposition & INPUT_FLUSH) {
 		if (c_dev->num_vals >= 2)
 			input_pass_values(dev, c_dev->vals, c_dev->num_vals);
@@ -342,19 +343,14 @@ static void input_handle_event(struct input_dev *dev,
 		input_pass_values(dev, c_dev->vals, c_dev->num_vals);
 		c_dev->num_vals = 0;
 	}
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 7, 0)
+#else
 	/**
 	 * compat:
-	 * - old kernels have a small evdev buffer output, flush them at 48.
-	 *   32 is an arbitrary number, less than 64 (the size of the output queue).
+	 * - old kernels have a small evdev buffer output, do not try to flush
+	 *   several events at once.
 	 */
-	if (c_dev->num_vals >= 32) {
-		input_pass_values(dev, c_dev->vals, c_dev->num_vals);
-		c_dev->num_vals = 0;
-		/* add a void event in case we split right before the actual EV_SYN(0) */
-		c_dev->vals[c_dev->num_vals++] = input_value_sync;
-	}
+	input_pass_values(dev, c_dev->vals, c_dev->num_vals);
+	c_dev->num_vals = 0;
 #endif
 
 }
