@@ -1300,11 +1300,6 @@ static const struct hid_device_id mt_devices[] = {
 		MT_USB_DEVICE(USB_VENDOR_ID_QUANTA,
 			USB_DEVICE_ID_QUANTA_OPTICAL_TOUCH_3008) },
 
-	/* Rafi panels */
-	{ .driver_data = MT_CLS_SERIAL,
-		MT_USB_DEVICE(USB_VENDOR_ID_RAFI,
-			USB_DEVICE_ID_RAFI_GLASSCAPE_TOUCH)},
-
 	/* Stantum panels */
 	{ .driver_data = MT_CLS_CONFIDENCE,
 		MT_USB_DEVICE(USB_VENDOR_ID_STANTUM,
