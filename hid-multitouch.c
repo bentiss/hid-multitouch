@@ -1375,6 +1375,7 @@ static const struct hid_device_id mt_devices[] = {
 	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x04F3, 0x000A) },
 	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x04F3, 0x0732) },
 	{ .driver_data = MT_CLS_DEFAULT, HID_DEVICE(BUS_I2C, HID_GROUP_MULTITOUCH, 0x04F3,0x200A) },
+	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x05BD, 0x0107) },
 	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x0EEF, 0x790A) },
 	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1870, 0x0100) },
 	{ .driver_data = MT_CLS_DEFAULT, MT_USB_DEVICE(0x1B96, 0x0C01) },
