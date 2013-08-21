@@ -46,6 +46,11 @@
 #include <linux/input/mt.h>
 #include <linux/string.h>
 
+/* forward multitouch option */
+static bool show_mt = true;
+module_param(show_mt, bool, 0444);
+MODULE_PARM_DESC(show_mt, "if true, exports multitouch axes, if not, use as a single touch device");
+
 
 MODULE_AUTHOR("Stephane Chatty <chatty@enac.fr>");
 MODULE_AUTHOR("Benjamin Tissoires <benjamin.tissoires@gmail.com>");
@@ -114,6 +119,8 @@ struct mt_device {
 	bool serial_maybe;	/* need to check for serial protocol */
 	bool curvalid;		/* is the current contact valid? */
 	unsigned mt_flags;	/* flags to pass to input-mt */
+	int mouse_emulation_slot; /* used if show_mt is false */
+	int * mouse_emulation_slot_states; /* used if show_mt is false */
 };
 
 static void mt_post_parse_default_settings(struct mt_device *td);
@@ -591,6 +598,27 @@ static int mt_compute_slot(struct mt_device *td, struct input_dev *input)
 	if (quirks & MT_QUIRK_SLOT_IS_CONTACTID_MINUS_ONE)
 		return td->curdata.contactid - 1;
 
+	if (!show_mt) {
+		/* manually compute slot */
+		int i;
+		int slot = -1;
+
+		if (!td-> mouse_emulation_slot_states)
+			return 0;
+
+		for (i = 0; i < td->maxcontacts && slot < 0; i++)
+		{
+			if (td-> mouse_emulation_slot_states[i] == td->curdata.contactid)
+				slot = i;
+		}
+
+		for (i = 0; i < td->maxcontacts && slot < 0; i++)
+		{
+			if (td-> mouse_emulation_slot_states[i] < 0)
+				slot = i;
+		}
+		return slot;
+	}
 	return input_mt_get_slot_by_key(input, td->curdata.contactid);
 }
 
@@ -617,6 +645,30 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
 			if (input_mt_is_active(slot) &&
 			    input_mt_is_used(mt, slot))
 				return;
+		}
+
+		if (!show_mt) {
+			if (td->mouse_emulation_slot < 0)
+				td->mouse_emulation_slot = slotnum;
+
+			if (slotnum == td->mouse_emulation_slot) {
+				input_event(input, EV_KEY, BTN_TOUCH,
+					s->touch_state || s->inrange_state);
+				if (s->touch_state || s->inrange_state) {
+					input_event(input, EV_ABS, ABS_X, s->x);
+					input_event(input, EV_ABS, ABS_Y, s->y);
+					input_event(input, EV_ABS, ABS_PRESSURE,
+							s->p);
+				}
+				input_sync(input);
+			}
+
+			if (td-> mouse_emulation_slot_states) {
+				if (s->touch_state || s->inrange_state)
+					td-> mouse_emulation_slot_states[slotnum] = s->contactid;
+				else
+					td-> mouse_emulation_slot_states[slotnum] = -1;
+			}
 		}
 
 		input_mt_slot(input, slotnum);
@@ -651,7 +703,18 @@ static void mt_complete_slot(struct mt_device *td, struct input_dev *input)
  */
 static void mt_sync_frame(struct mt_device *td, struct input_dev *input)
 {
-	input_mt_sync_frame(input);
+	int slot;
+	if (!show_mt) {
+		bool touches_in_this_gesture = false;
+		if (td-> mouse_emulation_slot_states) {
+			for (slot = 0; slot < td->maxcontacts; slot++)
+				touches_in_this_gesture |= td-> mouse_emulation_slot_states[slot] >= 0;
+		} else
+			touches_in_this_gesture = true;
+		if (!touches_in_this_gesture)
+			td->mouse_emulation_slot = -1;
+	} else
+		input_mt_sync_frame(input);
 	input_sync(input);
 	td->num_received = 0;
 }
@@ -791,6 +854,18 @@ static void mt_touch_input_configured(struct hid_device *hdev,
 		td->mt_flags |= INPUT_MT_DROP_UNUSED;
 
 	input_mt_init_slots(input, td->maxcontacts, td->mt_flags);
+
+	if (!show_mt) {
+		/* drop multitouch definitions */
+		int axis;
+		for (axis = ABS_MT_SLOT ; axis <= ABS_MT_LAST; axis++)
+			input->absbit[BIT_WORD(axis)] &= ~BIT_MASK(axis);
+
+		td-> mouse_emulation_slot_states = devm_kzalloc(&hdev->dev,
+				td->maxcontacts * sizeof(int),
+				GFP_KERNEL);
+
+	}
 
 	td->mt_flags = 0;
 }
