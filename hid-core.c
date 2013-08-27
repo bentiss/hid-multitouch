@@ -1311,9 +1311,7 @@ static bool hid_match_one_id(struct hid_device *hdev,
 		const struct hid_device_id *id)
 {
 	return (id->bus == HID_BUS_ANY || id->bus == hdev->bus) &&
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 		(id->group == HID_GROUP_ANY || id->group == hdev->group) &&
-#endif
 		(id->vendor == HID_ANY_ID || id->vendor == hdev->vendor) &&
 		(id->product == HID_ANY_ID || id->product == hdev->product);
 }
@@ -1389,13 +1387,6 @@ int hid_connect(struct hid_device *hdev, unsigned int connect_mask)
 	if ((connect_mask & HID_CONNECT_HIDINPUT) && !hidinput_connect(hdev,
 				connect_mask & HID_CONNECT_HIDINPUT_FORCE))
 		hdev->claimed |= HID_CLAIMED_INPUT;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 5, 0)
-	if (hdev->quirks & HID_QUIRK_MULTITOUCH) {
-		/* this device should be handled by hid-multitouch, skip it */
-		hdev->quirks &= ~HID_QUIRK_MULTITOUCH;
-		return -ENODEV;
-	}
-#endif
 
 	if ((connect_mask & HID_CONNECT_HIDDEV) && hdev->hiddev_connect &&
 			!hdev->hiddev_connect(hdev,
@@ -1777,9 +1768,7 @@ static ssize_t store_new_id(struct device_driver *drv, const char *buf,
 		return -ENOMEM;
 
 	dynid->id.bus = bus;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 5, 0)
 	dynid->id.group = HID_GROUP_ANY;
-#endif
 	dynid->id.vendor = vendor;
 	dynid->id.product = product;
 	dynid->id.driver_data = driver_data;

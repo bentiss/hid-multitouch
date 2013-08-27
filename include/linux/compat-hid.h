@@ -69,6 +69,16 @@ static inline struct inode *file_inode(struct file *f)
 #define HID_GROUP_ANY				0x0000
 #endif
 
+typedef unsigned long compat_kernel_ulong_t;
+
+struct compat_hid_device_id {
+	__u16 bus;
+	__u16 group;
+	__u32 vendor;
+	__u32 product;
+	compat_kernel_ulong_t driver_data;
+};
+
 /**
  * general hid functions
  */
