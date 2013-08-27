@@ -5,3 +5,5 @@
 *.order
 *.mod.c
 *.symvers
+*.unsigned
+41-hid-multitouch.rules
