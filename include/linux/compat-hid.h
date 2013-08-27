@@ -29,6 +29,8 @@
 #include <linux/version.h>
 #include <linux/backport.h>
 
+#include <linux/usb.h>
+
 #ifndef IS_ENABLED
 /*
  * Getting something that works in C and CPP for an arg that may or may
@@ -61,7 +63,51 @@ static inline struct inode *file_inode(struct file *f)
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 35)
-#define usb_alloc_coherent usb_buffer_alloc
+#define usb_alloc_coherent	usb_buffer_alloc
+#define usb_free_coherent	usb_buffer_free
+#endif
+
+#ifndef usb_unblock_urb
+#define usb_unblock_urb        usb_unpoison_urb
+
+/**
+ * usb_block_urb - reliably prevent further use of an URB
+ * @urb: pointer to URB to be blocked, may be NULL
+ *
+ * After the routine has run, attempts to resubmit the URB will fail
+ * with error -EPERM.  Thus even if the URB's completion handler always
+ * tries to resubmit, it will not succeed and the URB will become idle.
+ *
+ * The URB must not be deallocated while this routine is running.  In
+ * particular, when a driver calls this routine, it must insure that the
+ * completion handler cannot deallocate the URB.
+ */
+static void inline usb_block_urb(struct urb *urb)
+{
+	if (!urb)
+		return;
+
+	atomic_inc(&urb->reject);
+}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 34)
+static inline void usb_autopm_get_interface_no_resume(
+		struct usb_interface *intf)
+{
+	atomic_inc(&intf->pm_usage_cnt);
+}
+static inline void usb_autopm_put_interface_no_suspend(
+				struct usb_interface *intf)
+{
+	atomic_dec(&intf->pm_usage_cnt);
+}
+#endif
+
+
+#endif
+
+#ifndef PMSG_IS_AUTO
+#define PMSG_IS_AUTO(msg)      (((msg).event & PM_EVENT_AUTO) != 0)
 #endif
 
 #ifndef HID_BUS_ANY

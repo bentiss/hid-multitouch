@@ -5,7 +5,7 @@
 MODULE_NAME := usbhid_compat
 
 # Multipart objects.
-$(MODULE_NAME)-y	:= hid-core.o hid-core-2.6.34.o hid-quirks.o
+$(MODULE_NAME)-y	:= hid-core.o hid-quirks.o
 
 # Optional parts of multipart objects.
 

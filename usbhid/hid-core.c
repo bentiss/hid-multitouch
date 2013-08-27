@@ -16,7 +16,6 @@
  */
 
 #include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 38)
 
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -1602,15 +1601,12 @@ static int hid_reset_resume(struct usb_interface *intf)
 }
 
 #endif /* CONFIG_PM */
-
 static const struct usb_device_id hid_usb_ids[] = {
 	{ .match_flags = USB_DEVICE_ID_MATCH_INT_CLASS,
 		.bInterfaceClass = USB_INTERFACE_CLASS_HID },
 	{ }						/* Terminating entry */
 };
-
 MODULE_DEVICE_TABLE (usb, hid_usb_ids);
-
 static struct usb_driver hid_driver = {
 	.name =		"usbhid-compat",
 	.probe =	usbhid_probe,
@@ -1619,7 +1615,6 @@ static struct usb_driver hid_driver = {
 	.suspend =	hid_suspend,
 	.resume =	hid_resume,
 	.reset_resume =	hid_reset_resume,
-#endif
 	.pre_reset =	hid_pre_reset,
 	.post_reset =	hid_post_reset,
 	.id_table =	hid_usb_ids,
@@ -1665,4 +1660,3 @@ MODULE_AUTHOR("Jiri Kosina");
 MODULE_DESCRIPTION(DRIVER_DESC);
 MODULE_LICENSE(DRIVER_LICENSE);
 
-#endif
