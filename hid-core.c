@@ -1352,7 +1352,7 @@ int hid_report_raw_event(struct hid_device *hid, int type, u8 *data, int size,
 			goto out;
 	}
 
-	if (hid->claimed != HID_CLAIMED_HIDRAW) {
+	if (hid->claimed != HID_CLAIMED_HIDRAW && report->maxfield) {
 		for (a = 0; a < report->maxfield; a++)
 			hid_input_field(hid, report->field[a], cdata, interrupt);
 		hdrv = hid->driver;
