@@ -150,6 +150,7 @@ struct compat_hid_device_id {
 #define hid_allocate_device		LINUX_BACKPORT(hid_allocate_device)
 #define hid_register_report		LINUX_BACKPORT(hid_register_report)
 #define hid_parse_report		LINUX_BACKPORT(hid_parse_report)
+#define hid_validate_values		LINUX_BACKPORT(hid_validate_values)
 #define hid_open_report			LINUX_BACKPORT(hid_open_report)
 #define hid_check_keys_pressed		LINUX_BACKPORT(hid_check_keys_pressed)
 #define hid_connect			LINUX_BACKPORT(hid_connect)
