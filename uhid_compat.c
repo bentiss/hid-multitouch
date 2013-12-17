@@ -25,7 +25,7 @@
 #include <linux/uhid.h>
 #include <linux/wait.h>
 
-#define UHID_NAME	"uhid"
+#define UHID_NAME	"uhid-compat"
 #define UHID_BUFSIZE	512
 
 struct uhid_device {

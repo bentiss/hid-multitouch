@@ -89,11 +89,27 @@ struct mt_class {
 	__s32 sn_pressure;	/* Signal/noise ratio for pressure events */
 	__u8 maxcontacts;
 	bool is_indirect;	/* true for touchpads */
+	bool export_all_inputs;	/* do not ignore mouse, keyboards, etc... */
 };
 
 struct mt_fields {
 	unsigned usages[HID_MAX_FIELDS];
 	unsigned int length;
+};
+
+struct mt_protocol {
+	char *suffix;
+	int (*event)(struct hid_device *hdev, struct hid_field *field,
+			struct hid_usage *usage, __s32 value);
+	void (*report)(struct hid_device *hdev, struct hid_report *report);
+	int (*input_mapping)(struct hid_device *hdev,
+			struct hid_input *hidinput, struct hid_field *field,
+			struct hid_usage *usage, unsigned long **bit, int *max);
+	int (*input_mapped)(struct hid_device *hdev,
+			struct hid_input *hidinput, struct hid_field *field,
+			struct hid_usage *usage, unsigned long **bit, int *max);
+	void (*input_configured)(struct hid_device *hdev,
+				 struct hid_input *hidinput);
 };
 
 struct mt_device {
@@ -104,8 +120,7 @@ struct mt_device {
 	int cc_index;	/* contact count field index in the report */
 	int cc_value_index;	/* contact count value index in the field */
 	unsigned last_slot_field;	/* the last field of a slot */
-	unsigned mt_report_id;	/* the report ID of the multitouch device */
-	unsigned pen_report_id;	/* the report ID of the pen device */
+	struct mt_protocol protocols[HID_MAX_IDS]; /* per-id callbacks */
 	__s16 inputmode;	/* InputMode HID feature, -1 if non-existent */
 	__s16 inputmode_index;	/* InputMode HID feature index in the report */
 	__s16 maxcontact_report_id;	/* Maximum Contact Number HID feature,
@@ -125,6 +140,64 @@ struct mt_device {
 
 static void mt_post_parse_default_settings(struct mt_device *td);
 static void mt_post_parse(struct mt_device *td);
+
+static int mt_touch_input_mapping(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max);
+static int mt_touch_input_mapped(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max);
+static int mt_touch_event(struct hid_device *hid,
+		struct hid_field *field, struct hid_usage *usage,
+		__s32 value);
+static void mt_touch_report(struct hid_device *hid,
+		struct hid_report *report);
+static void mt_touch_input_configured(struct hid_device *hdev,
+		struct hid_input *hi);
+
+static struct mt_protocol mt_protocol_touch = {
+	.suffix = NULL,
+	.event = mt_touch_event,
+	.report = mt_touch_report,
+	.input_mapping = mt_touch_input_mapping,
+	.input_mapped = mt_touch_input_mapped,
+	.input_configured = mt_touch_input_configured,
+};
+
+static int mt_generic_input_mapping(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max);
+static int mt_generic_input_mapped(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max);
+static int mt_generic_event(struct hid_device *hid,
+		struct hid_field *field, struct hid_usage *usage,
+		__s32 value);
+static void mt_generic_report(struct hid_device *hid,
+		struct hid_report *report);
+
+static struct mt_protocol mt_protocol_generic = {
+	.suffix = NULL,
+	.event = mt_generic_event,
+	.report = mt_generic_report,
+	.input_mapping = mt_generic_input_mapping,
+	.input_mapped = mt_generic_input_mapped,
+	.input_configured = NULL,
+};
+
+static void mt_pen_input_configured(struct hid_device *hdev,
+		struct hid_input *hi);
+
+static struct mt_protocol mt_protocol_pen = {
+	.suffix = "Pen",
+	.event = mt_generic_event,
+	.report = mt_generic_report,
+	.input_mapping = mt_generic_input_mapping,
+	.input_mapped = mt_generic_input_mapped,
+	.input_configured = mt_pen_input_configured,
+};
+
+static struct mt_protocol mt_protocol_ignore = { 0 };
 
 /* classes of device behavior */
 #define MT_CLS_DEFAULT				0x0001
@@ -152,6 +225,7 @@ static void mt_post_parse(struct mt_device *td);
 #define MT_CLS_FLATFROG				0x0107
 #define MT_CLS_GENERALTOUCH_TWOFINGERS		0x0108
 #define MT_CLS_GENERALTOUCH_PWT_TENFINGERS	0x0109
+#define MT_CLS_ANTON_TP				0x010a
 
 #define MT_DEFAULT_MAXCONTACT	10
 #define MT_MAX_MAXCONTACT	250
@@ -264,12 +338,17 @@ static struct mt_class mt_classes[] = {
 		.quirks	= MT_QUIRK_NOT_SEEN_MEANS_UP |
 			MT_QUIRK_SLOT_IS_CONTACTID
 	},
-
 	{ .name = MT_CLS_FLATFROG,
 		.quirks = MT_QUIRK_NOT_SEEN_MEANS_UP |
 			MT_QUIRK_NO_AREA,
 		.sn_move = 2048,
 		.maxcontacts = 40,
+	},
+	{ .name = MT_CLS_ANTON_TP,
+		.quirks = MT_QUIRK_ALWAYS_VALID |
+			MT_QUIRK_CONTACT_CNT_ACCURATE,
+		.is_indirect = true,
+		.export_all_inputs = true,
 	},
 	{ }
 };
@@ -367,32 +446,28 @@ static void mt_store_field(struct hid_usage *usage, struct mt_device *td,
 	f->usages[f->length++] = usage->hid;
 }
 
-static int mt_pen_input_mapping(struct hid_device *hdev, struct hid_input *hi,
-		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max)
-{
-	struct mt_device *td = hid_get_drvdata(hdev);
-
-	td->pen_report_id = field->report->id;
-
-	return 0;
-}
-
-static int mt_pen_input_mapped(struct hid_device *hdev, struct hid_input *hi,
-		struct hid_field *field, struct hid_usage *usage,
-		unsigned long **bit, int *max)
+static int mt_generic_input_mapping(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max)
 {
 	return 0;
 }
 
-static int mt_pen_event(struct hid_device *hid, struct hid_field *field,
+static int mt_generic_input_mapped(struct hid_device *hdev,
+		struct hid_input *hi, struct hid_field *field,
+		struct hid_usage *usage, unsigned long **bit, int *max)
+{
+	return 0;
+}
+
+static int mt_generic_event(struct hid_device *hid, struct hid_field *field,
 				struct hid_usage *usage, __s32 value)
 {
 	/* let hid-input handle it */
 	return 0;
 }
 
-static void mt_pen_report(struct hid_device *hid, struct hid_report *report)
+static void mt_generic_report(struct hid_device *hid, struct hid_report *report)
 {
 	struct hid_field *field = report->field[0];
 
@@ -487,7 +562,6 @@ static int mt_touch_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		case HID_DG_CONTACTID:
 			mt_store_field(usage, td, hi);
 			td->touches_by_report++;
-			td->mt_report_id = field->report->id;
 			return 1;
 		case HID_DG_WIDTH:
 			hid_map_usage(hi, usage, bit, max,
@@ -851,57 +925,98 @@ static int mt_input_mapping(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
 		unsigned long **bit, int *max)
 {
+	struct mt_device *td = hid_get_drvdata(hdev);
+	unsigned report_id = field->report->id;
+
+	if (td->mtclass.export_all_inputs) {
+		if (!td->protocols[report_id].suffix)
+			pr_err("%s report_id:%d %s:%d\n", __func__, report_id, __FILE__, __LINE__);
+		td->protocols[report_id] = mt_protocol_generic;
+		switch (field->application) {
+		case HID_GD_KEYPAD:
+			td->protocols[report_id].suffix = "Keypad";
+			break;
+		case HID_GD_MOUSE:
+			td->protocols[report_id].suffix = "Mouse";
+			break;
+		case HID_DG_TOUCHSCREEN:
+			td->protocols[report_id].suffix = "Touchscreen";
+			break;
+		case HID_GD_SYSTEM_CONTROL:
+			td->protocols[report_id].suffix = "System Control";
+			break;
+		case HID_CP_CONSUMER_CONTROL:
+			td->protocols[report_id].suffix = "Consumer Control";
+			break;
+		}
+	}
+
 	/* Only map fields from TouchScreen or TouchPad collections.
 	* We need to ignore fields that belong to other collections
 	* such as Mouse that might have the same GenericDesktop usages. */
-	if (field->application != HID_DG_TOUCHSCREEN &&
+	if (!td->mtclass.export_all_inputs &&
+	    field->application != HID_DG_TOUCHSCREEN &&
 	    field->application != HID_DG_PEN &&
 	    field->application != HID_DG_TOUCHPAD)
-		return -1;
+		td->protocols[report_id] = mt_protocol_ignore;
 
 	if (field->physical == HID_DG_STYLUS)
-		return mt_pen_input_mapping(hdev, hi, field, usage, bit, max);
+		td->protocols[report_id] = mt_protocol_pen;
 
-	return mt_touch_input_mapping(hdev, hi, field, usage, bit, max);
+	else if (field->application == HID_DG_TOUCHSCREEN ||
+	    field->application == HID_DG_PEN ||
+	    field->application == HID_DG_TOUCHPAD) {
+		td->protocols[report_id] = mt_protocol_touch;
+		if (td->mtclass.export_all_inputs)
+			td->protocols[report_id].suffix = "Touch";
+	}
+
+	if (td->protocols[report_id].input_mapping)
+		return td->protocols[report_id].input_mapping(hdev, hi,
+				field, usage, bit, max);
+
+	/* ignore if no protocol is given */
+	return -1;
 }
 
 static int mt_input_mapped(struct hid_device *hdev, struct hid_input *hi,
 		struct hid_field *field, struct hid_usage *usage,
 		unsigned long **bit, int *max)
 {
-	if (field->physical == HID_DG_STYLUS)
-		return mt_pen_input_mapped(hdev, hi, field, usage, bit, max);
+	struct mt_device *td = hid_get_drvdata(hdev);
+	unsigned report_id = field->report->id;
 
-	return mt_touch_input_mapped(hdev, hi, field, usage, bit, max);
+	if (td->protocols[report_id].input_mapped)
+		return td->protocols[report_id].input_mapped(hdev, hi, field,
+				usage, bit, max);
+
+	/* ignore if no protocol is given */
+	return -1;
 }
 
 static int mt_event(struct hid_device *hid, struct hid_field *field,
 				struct hid_usage *usage, __s32 value)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
+	unsigned report_id = field->report->id;
 
-	if (field->report->id == td->mt_report_id)
-		return mt_touch_event(hid, field, usage, value);
+	if (td->protocols[report_id].event)
+		return td->protocols[report_id].event(hid, field, usage, value);
 
-	if (field->report->id == td->pen_report_id)
-		return mt_pen_event(hid, field, usage, value);
-
-	/* ignore other reports */
+	/* ignore if no protocol is given */
 	return 1;
 }
 
 static void mt_report(struct hid_device *hid, struct hid_report *report)
 {
 	struct mt_device *td = hid_get_drvdata(hid);
+	unsigned report_id = report->id;
 
 	if (!(hid->claimed & HID_CLAIMED_INPUT))
 		return;
 
-	if (report->id == td->mt_report_id)
-		mt_touch_report(hid, report);
-
-	if (report->id == td->pen_report_id)
-		mt_pen_report(hid, report);
+	if (td->protocols[report_id].report)
+		return td->protocols[report_id].report(hid, report);
 }
 
 static void mt_set_input_mode(struct hid_device *hdev)
@@ -981,17 +1096,14 @@ static void mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
 {
 	struct mt_device *td = hid_get_drvdata(hdev);
 	char *name;
-	const char *suffix = NULL;
+	const char *suffix;
+	unsigned report_id = hi->report->id;
 
-	if (hi->report->id == td->mt_report_id)
-		mt_touch_input_configured(hdev, hi);
+	if (td->protocols[report_id].input_configured)
+		td->protocols[report_id].input_configured(hdev, hi);
 
-	if (hi->report->field[0]->physical == HID_DG_STYLUS) {
-		suffix = "Pen";
-		mt_pen_input_configured(hdev, hi);
-	}
-
-	if (suffix) {
+	if (td->protocols[report_id].suffix) {
+		suffix = td->protocols[report_id].suffix;
 		name = devm_kzalloc(&hi->input->dev,
 				    strlen(hdev->name) + strlen(suffix) + 2,
 				    GFP_KERNEL);
@@ -1049,8 +1161,6 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	td->inputmode = -1;
 	td->maxcontact_report_id = -1;
 	td->cc_index = -1;
-	td->mt_report_id = -1;
-	td->pen_report_id = -1;
 	hid_set_drvdata(hdev, td);
 
 	td->fields = devm_kzalloc(&hdev->dev, sizeof(struct mt_fields),
@@ -1126,6 +1236,11 @@ static const struct hid_device_id mt_devices[] = {
 	{ .driver_data = MT_CLS_NSMU,
 		MT_USB_DEVICE(USB_VENDOR_ID_ACTIONSTAR,
 			USB_DEVICE_ID_ACTIONSTAR_1011) },
+
+	/* Anton Touch Pad */
+	{ .driver_data = MT_CLS_ANTON_TP,
+		MT_USB_DEVICE(USB_VENDOR_ID_ANTON,
+			USB_DEVICE_ID_ANTON_TOUCH_PAD) },
 
 	/* Atmel panels */
 	{ .driver_data = MT_CLS_SERIAL,

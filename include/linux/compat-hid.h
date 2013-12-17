@@ -141,6 +141,7 @@ struct compat_hid_device_id {
 #define hidinput_disconnect		LINUX_BACKPORT(hidinput_disconnect)
 
 #define hid_set_field			LINUX_BACKPORT(hid_set_field)
+#define hid_alloc_report_buf		LINUX_BACKPORT(hid_alloc_report_buf)
 #define hid_input_report		LINUX_BACKPORT(hid_input_report)
 #define hidinput_find_field		LINUX_BACKPORT(hidinput_find_field)
 #define hidinput_get_led_field		LINUX_BACKPORT(hidinput_get_led_field)
