@@ -16,7 +16,7 @@
  */
 
 #include <linux/hid.h>
-#include <linux/export.h>
+#include "linux/compat-export.h"
 #include <linux/slab.h>
 
 #include "../hid-ids.h"
