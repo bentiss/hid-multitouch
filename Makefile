@@ -20,6 +20,7 @@ endif
 
 obj-m		+= $(HID_MODULE_NAME).o
 obj-m		+= uhid_compat.o
+obj-m		+= hid-generic-compat.o
 
 obj-m			+= usbhid/
 
