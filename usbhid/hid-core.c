@@ -1238,6 +1238,8 @@ static int usbhid_probe(struct usb_interface *intf, const struct usb_device_id *
 	size_t len;
 	int ret;
 
+	pr_err("%s  %s:%d\n", __func__, __FILE__, __LINE__);
+
 	dbg_hid("HID probe called for ifnum %d\n",
 			intf->altsetting->desc.bInterfaceNumber);
 

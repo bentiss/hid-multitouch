@@ -2414,6 +2414,8 @@ int hid_add_device(struct hid_device *hdev)
 	static atomic_t id = ATOMIC_INIT(0);
 	int ret;
 
+	pr_err("%s  %s:%d\n", __func__, __FILE__, __LINE__);
+
 	if (WARN_ON(hdev->status & HID_STAT_ADDED))
 		return -EBUSY;
 
@@ -2421,6 +2423,8 @@ int hid_add_device(struct hid_device *hdev)
 	 * wait for coming driver */
 	if (hid_ignore(hdev))
 		return -ENODEV;
+
+	pr_err("%s  %s:%d\n", __func__, __FILE__, __LINE__);
 
 	/*
 	 * Read the device report descriptor once and use as template
@@ -2446,6 +2450,8 @@ int hid_add_device(struct hid_device *hdev)
 	 * is converted to allow more than 20 bytes as the device name? */
 	dev_set_name(&hdev->dev, "%04X:%04X:%04X.%04X", hdev->bus,
 		     hdev->vendor, hdev->product, atomic_inc_return(&id));
+
+	pr_err("%s %s: group:%04x %s:%d\n", __func__, dev_name(&hdev->dev), hdev->group, __FILE__, __LINE__);
 
 	hid_debug_register(hdev, dev_name(&hdev->dev));
 	ret = device_add(&hdev->dev);
