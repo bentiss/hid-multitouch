@@ -915,6 +915,9 @@ static void mt_input_configured(struct hid_device *hdev, struct hid_input *hi)
 		case HID_DG_TOUCHSCREEN:
 			/* we do not set suffix = "Touchscreen" */
 			break;
+		case HID_DG_TOUCHPAD:
+			suffix = "TouchPad";
+			break;
 		case HID_GD_SYSTEM_CONTROL:
 			suffix = "System Control";
 			break;
@@ -1212,6 +1215,10 @@ static const struct hid_device_id mt_devices[] = {
 	{  .driver_data = MT_CLS_NSMU,
 		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
 			USB_DEVICE_ID_ILITEK_MULTITOUCH) },
+
+	/* Microsoft Surface covers */
+	{ .driver_data = MT_CLS_EXPORT_ALL_INPUTS,
+		MT_USB_DEVICE(USB_VENDOR_ID_MICROSOFT, 0x07dc) },
 
 	/* MosArt panels */
 	{ .driver_data = MT_CLS_CONFIDENCE_MINUS_ONE,
