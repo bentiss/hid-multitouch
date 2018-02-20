@@ -1403,8 +1403,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-static int mt_reset_resume(struct hid_device *hdev)
+static int __maybe_unused mt_reset_resume(struct hid_device *hdev)
 {
 	mt_release_contacts(hdev);
 	mt_set_maxcontacts(hdev);
@@ -1412,7 +1411,7 @@ static int mt_reset_resume(struct hid_device *hdev)
 	return 0;
 }
 
-static int mt_resume(struct hid_device *hdev)
+static int __maybe_unused mt_resume(struct hid_device *hdev)
 {
 	/* Some Elan legacy devices require SET_IDLE to be set on resume.
 	 * It should be safe to send it to other devices too.
@@ -1422,7 +1421,6 @@ static int mt_resume(struct hid_device *hdev)
 
 	return 0;
 }
-#endif
 
 static void mt_remove(struct hid_device *hdev)
 {
