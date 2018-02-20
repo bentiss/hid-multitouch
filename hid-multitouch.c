@@ -124,6 +124,8 @@ struct mt_device {
 	unsigned long initial_quirks;	/* initial quirks state */
 	__s16 inputmode;	/* InputMode HID feature, -1 if non-existent */
 	__s16 inputmode_index;	/* InputMode HID feature index in the report */
+	__s16 latencymode;	/* LatencyMode feature, -1 if non-existent */
+	__s16 latencymode_index; /* LatencyMode feature index in the report */
 	__s16 maxcontact_report_id;	/* Maximum Contact Number HID feature,
 				   -1 if non-existent */
 	__u8 inputmode_value;  /* InputMode HID feature value */
@@ -190,6 +192,15 @@ static void mt_post_parse(struct mt_device *td);
 
 #define MT_USB_DEVICE(v, p)	HID_DEVICE(BUS_USB, HID_GROUP_MULTITOUCH, v, p)
 #define MT_BT_DEVICE(v, p)	HID_DEVICE(BUS_BLUETOOTH, HID_GROUP_MULTITOUCH, v, p)
+
+#ifndef HID_DG_LATENCYMODE
+#define HID_DG_LATENCYMODE 0x000d0060
+#endif /* HID_DG_LATENCY_MODE */
+
+enum latency_mode {
+	HID_LATENCY_NORMAL = 0,
+	HID_LATENCY_HIGH = 1,
+};
 
 /*
  * these device-dependent functions determine what slot corresponds
@@ -419,6 +430,29 @@ static void mt_feature_mapping(struct hid_device *hdev,
 			 */
 			dev_info(&hdev->dev,
 				 "Ignoring the extra HID_DG_INPUTMODE\n");
+		}
+
+		break;
+	case HID_DG_LATENCYMODE:
+		/* Ignore if value index is out of bounds. */
+		if (usage->usage_index >= field->report_count) {
+			dev_err(&hdev->dev,
+				"HID_DG_LATENCYMODE out of range\n");
+			break;
+		}
+
+		if (td->latencymode < 0) {
+			td->latencymode = field->report->id;
+			td->latencymode_index = usage->usage_index;
+		} else {
+			/*
+			 * Some elan panels wrongly declare 2 input mode
+			 * features, and silently ignore when we set the
+			 * value in the second field. Skip the second feature
+			 * and hope for the best.
+			 */
+			dev_info(&hdev->dev,
+				 "Ignoring the extra HID_DG_LATENCYMODE\n");
 		}
 
 		break;
@@ -1104,6 +1138,26 @@ static void mt_set_input_mode(struct hid_device *hdev)
 	}
 }
 
+static void mt_set_latency_mode(struct hid_device *hdev,
+				enum latency_mode value)
+{
+	struct mt_device *td = hid_get_drvdata(hdev);
+	struct hid_report *r;
+	struct hid_report_enum *re;
+
+	if (td->latencymode < 0)
+		return;
+
+	pr_err("%s setting latency mode to %d %s:%d\n", __func__, value, __FILE__, __LINE__);
+
+	re = &(hdev->report_enum[HID_FEATURE_REPORT]);
+	r = re->report_id_hash[td->latencymode];
+	if (r) {
+		r->field[0]->value[td->latencymode_index] = value;
+		hid_hw_request(hdev, r, HID_REQ_SET_REPORT);
+	}
+}
+
 static void mt_set_maxcontacts(struct hid_device *hdev)
 {
 	struct mt_device *td = hid_get_drvdata(hdev);
@@ -1326,6 +1380,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	td->hdev = hdev;
 	td->mtclass = *mtclass;
 	td->inputmode = -1;
+	td->latencymode = -1;
 	td->maxcontact_report_id = -1;
 	td->inputmode_value = MT_INPUTMODE_TOUCHSCREEN;
 	td->cc_index = -1;
@@ -1395,6 +1450,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 
 	mt_set_maxcontacts(hdev);
 	mt_set_input_mode(hdev);
+	mt_set_latency_mode(hdev, HID_LATENCY_NORMAL);
 
 	/* release .fields memory as it is not used anymore */
 	devm_kfree(&hdev->dev, td->fields);
@@ -1408,6 +1464,7 @@ static int __maybe_unused mt_reset_resume(struct hid_device *hdev)
 	mt_release_contacts(hdev);
 	mt_set_maxcontacts(hdev);
 	mt_set_input_mode(hdev);
+	mt_set_latency_mode(hdev, HID_LATENCY_NORMAL);
 	return 0;
 }
 
@@ -1418,6 +1475,14 @@ static int __maybe_unused mt_resume(struct hid_device *hdev)
 	 * Tested on 3M, Stantum, Cypress, Zytronic, eGalax, and Elan panels. */
 
 	hid_hw_idle(hdev, 0, 0, HID_REQ_SET_IDLE);
+
+	return 0;
+}
+
+static int __maybe_unused mt_suspend(struct hid_device *hdev,
+				     pm_message_t message)
+{
+	mt_set_latency_mode(hdev, HID_LATENCY_HIGH);
 
 	return 0;
 }
@@ -1789,6 +1854,7 @@ static struct hid_driver mt_driver = {
 #ifdef CONFIG_PM
 	.reset_resume = mt_reset_resume,
 	.resume = mt_resume,
+	.suspend = mt_suspend,
 #endif
 };
 module_hid_driver(mt_driver);
