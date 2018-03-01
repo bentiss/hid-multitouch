@@ -1,6 +1,7 @@
 MODULE_NAME := hid-multitouch
 
 obj-m			+= $(MODULE_NAME).o
+obj-m			+= i2c-hid.o
 
 KDIR := /lib/modules/$(shell uname -r)/build
 PWD := $(shell pwd)
