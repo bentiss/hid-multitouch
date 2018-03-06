@@ -486,11 +486,11 @@ static void i2c_hid_get_input(struct i2c_hid *ihid)
 		return;
 	}
 
-	i2c_hid_dbg(ihid, "input: %*ph\n", size, ihid->inbuf);
+	i2c_hid_dbg(ihid, "input: %*ph\n", ret_size, ihid->inbuf);
 
-	//if (test_bit(I2C_HID_STARTED, &ihid->flags))
-	//	hid_input_report(ihid->hid, HID_INPUT_REPORT, ihid->inbuf + 2,
-	//			ret_size - 2, 1);
+	if (test_bit(I2C_HID_STARTED, &ihid->flags))
+		hid_input_report(ihid->hid, HID_INPUT_REPORT, ihid->inbuf + 2,
+				ret_size - 2, 1);
 
 	return;
 }
