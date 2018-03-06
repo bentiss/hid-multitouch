@@ -126,6 +126,10 @@ struct mt_device {
 	__s16 inputmode_index;	/* InputMode HID feature index in the report */
 	__s16 latencymode;	/* LatencyMode feature, -1 if non-existent */
 	__s16 latencymode_index; /* LatencyMode feature index in the report */
+	__s16 buttonswitch;	/* ButtonSwitch feature, -1 if non-existent */
+	__s16 buttonswitch_index; /* ButtonSwitch feature index in the report */
+	__s16 surfaceswitch;	/* SurfaceSwitch feature, -1 if non-existent */
+	__s16 surfaceswitch_index; /* SurfaceSwitch feature index in the report */
 	__s16 maxcontact_report_id;	/* Maximum Contact Number HID feature,
 				   -1 if non-existent */
 	__u8 inputmode_value;  /* InputMode HID feature value */
@@ -196,6 +200,14 @@ static void mt_post_parse(struct mt_device *td);
 #ifndef HID_DG_LATENCYMODE
 #define HID_DG_LATENCYMODE 0x000d0060
 #endif /* HID_DG_LATENCY_MODE */
+
+#ifndef HID_DG_SURFACESWITCH
+#define HID_DG_SURFACESWITCH 0x000d0057
+#endif /* HID_DG_SURFACESWITCH */
+
+#ifndef HID_DG_BUTTONSWITCH
+#define HID_DG_BUTTONSWITCH 0x000d0058
+#endif /* HID_DG_BUTTONSWITCH */
 
 enum latency_mode {
 	HID_LATENCY_NORMAL = 0,
@@ -453,6 +465,40 @@ static void mt_feature_mapping(struct hid_device *hdev,
 			 */
 			dev_info(&hdev->dev,
 				 "Ignoring the extra HID_DG_LATENCYMODE\n");
+		}
+
+		break;
+	case HID_DG_SURFACESWITCH:
+		/* Ignore if value index is out of bounds. */
+		if (usage->usage_index >= field->report_count) {
+			dev_err(&hdev->dev,
+				"HID_DG_SURFACESWITCH out of range\n");
+			break;
+		}
+
+		if (td->surfaceswitch < 0) {
+			td->surfaceswitch = field->report->id;
+			td->surfaceswitch_index = usage->usage_index;
+		} else {
+			dev_info(&hdev->dev,
+				 "Ignoring the extra HID_DG_SURFACESWITCH\n");
+		}
+
+		break;
+	case HID_DG_BUTTONSWITCH:
+		/* Ignore if value index is out of bounds. */
+		if (usage->usage_index >= field->report_count) {
+			dev_err(&hdev->dev,
+				"HID_DG_BUTTONSWITCH out of range\n");
+			break;
+		}
+
+		if (td->buttonswitch < 0) {
+			td->buttonswitch = field->report->id;
+			td->buttonswitch_index = usage->usage_index;
+		} else {
+			dev_info(&hdev->dev,
+				 "Ignoring the extra HID_DG_BUTTONSWITCH\n");
 		}
 
 		break;
@@ -1158,6 +1204,35 @@ static void mt_set_latency_mode(struct hid_device *hdev,
 	}
 }
 
+static void mt_set_switches(struct hid_device *hdev, bool surface, bool button)
+{
+	struct mt_device *td = hid_get_drvdata(hdev);
+	struct hid_report *rs, *rb;
+	struct hid_report_enum *re;
+
+	if (td->surfaceswitch < 0 || td->buttonswitch < 0)
+		return;
+
+	pr_err("%s setting surface and button switch to %d and %d %s:%d\n", __func__, surface, button, __FILE__, __LINE__);
+
+	re = &(hdev->report_enum[HID_FEATURE_REPORT]);
+	rs = re->report_id_hash[td->surfaceswitch];
+	if (rs) {
+		rs->field[0]->value[td->surfaceswitch_index] = surface;
+	}
+
+	rb = re->report_id_hash[td->buttonswitch];
+	if (rb) {
+		rb->field[0]->value[td->buttonswitch_index] = button;
+	}
+
+	if (rs)
+		hid_hw_request(hdev, rs, HID_REQ_SET_REPORT);
+
+	if (rb && rb != rs)
+		hid_hw_request(hdev, rb, HID_REQ_SET_REPORT);
+}
+
 static void mt_set_maxcontacts(struct hid_device *hdev)
 {
 	struct mt_device *td = hid_get_drvdata(hdev);
@@ -1381,6 +1456,8 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	td->mtclass = *mtclass;
 	td->inputmode = -1;
 	td->latencymode = -1;
+	td->surfaceswitch = -1;
+	td->buttonswitch = -1;
 	td->maxcontact_report_id = -1;
 	td->inputmode_value = MT_INPUTMODE_TOUCHSCREEN;
 	td->cc_index = -1;
@@ -1451,6 +1528,7 @@ static int mt_probe(struct hid_device *hdev, const struct hid_device_id *id)
 	mt_set_maxcontacts(hdev);
 	mt_set_input_mode(hdev);
 	mt_set_latency_mode(hdev, HID_LATENCY_NORMAL);
+	mt_set_switches(hdev, true, true);
 
 	/* release .fields memory as it is not used anymore */
 	devm_kfree(&hdev->dev, td->fields);
@@ -1465,6 +1543,7 @@ static int __maybe_unused mt_reset_resume(struct hid_device *hdev)
 	mt_set_maxcontacts(hdev);
 	mt_set_input_mode(hdev);
 	mt_set_latency_mode(hdev, HID_LATENCY_NORMAL);
+	mt_set_switches(hdev, true, true);
 	return 0;
 }
 
@@ -1483,6 +1562,7 @@ static int __maybe_unused mt_suspend(struct hid_device *hdev,
 				     pm_message_t message)
 {
 	mt_set_latency_mode(hdev, HID_LATENCY_HIGH);
+	mt_set_switches(hdev, false, false);
 
 	return 0;
 }
