@@ -417,6 +417,29 @@ static void mt_get_feature(struct hid_device *hdev, struct hid_report *report)
 	kfree(buf);
 }
 
+static void mt_set_feature(struct hid_device *hdev, struct hid_report *report,
+			   __u8 *data, int data_size)
+{
+	int ret, size = hid_report_len(report);
+	u8 *buf;
+
+	buf = hid_alloc_report_buf(report, GFP_KERNEL);
+	if (!buf)
+		return;
+
+	buf[0] = report->id;
+	memcpy(buf + 1, data, min(data_size, size - 1));
+
+	ret = hid_hw_raw_request(hdev, report->id, buf, size,
+				 HID_FEATURE_REPORT, HID_REQ_SET_REPORT);
+	if (ret < 0) {
+		dev_warn(&hdev->dev, "failed to set feature %d\n",
+			 report->id);
+	}
+
+	kfree(buf);
+}
+
 static void mt_feature_mapping(struct hid_device *hdev,
 		struct hid_field *field, struct hid_usage *usage)
 {
@@ -530,6 +553,24 @@ static void mt_feature_mapping(struct hid_device *hdev,
 		/* Retrieve the Win8 blob once to enable some devices */
 		if (usage->usage_index == 0)
 			mt_get_feature(hdev, field->report);
+		break;
+	case 0xff0000c4:
+		if (usage->usage_index == 0) {
+			__u8 magic_sequence[] = {
+				0x05, 0x03, 0xa0, 0x01,
+				0x05, 0x03, 0x04, 0x01,
+				0x05, 0x03, 0x02, 0x01,
+				0x05, 0x03, 0x02, 0x01,
+			};
+			unsigned int i;
+
+			for (i=0; i < 4; i++) {
+				mt_set_feature(hdev, field->report,
+					       magic_sequence + i * 4,
+					       4);
+				mt_get_feature(hdev, field->report);
+			}
+		}
 		break;
 	}
 }
