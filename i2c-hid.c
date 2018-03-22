@@ -807,7 +807,7 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 	dev_dbg(&client->dev, "Requesting IRQ: %d\n", client->irq);
 
 	if (!irq_get_trigger_type(client->irq))
-		irqflags = IRQF_TRIGGER_LOW;
+		irqflags = IRQF_TRIGGER_FALLING;
 
 	ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq,
 				   irqflags | IRQF_ONESHOT, client->name, ihid);
