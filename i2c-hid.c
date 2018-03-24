@@ -806,8 +806,21 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 
 	dev_dbg(&client->dev, "Requesting IRQ: %d\n", client->irq);
 
-	// if (!irq_get_trigger_type(client->irq))
-	irqflags = IRQF_TRIGGER_FALLING;
+	if (!irq_get_trigger_type(client->irq))
+		irqflags = IRQF_TRIGGER_LOW;
+
+	// Tryed each value of IRQF_TRIGGER_* without any change noticed (see https://elixir.bootlin.com/linux/latest/source/include/linux/interrupt.h#L31)
+	// irqflags = IRQF_TRIGGER_NONE;
+	// irqflags = IRQF_TRIGGER_RISING;
+	// irqflags = IRQF_TRIGGER_FALLING;
+	// irqflags = IRQF_TRIGGER_HIGH;
+	// irqflags = IRQF_TRIGGER_LOW;
+	// irqflags = IRQF_TRIGGER_PROBE;
+
+	// Never seen output of this debug print in dmesg / journalctl --follow ...
+	// Is this function (i2c_hid_init_irq) is really called ?
+	pr_err("i2c_hid i2c_hid_init_irq: current IRQF is %lu\n", irqflags);
+	printk(KERN_ALERT "i2c_hid test kernel alert\n");
 
 	ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq,
 				   irqflags | IRQF_ONESHOT, client->name, ihid);
