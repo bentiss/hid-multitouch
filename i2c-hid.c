@@ -819,7 +819,6 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 	// irqflags = IRQF_TRIGGER_PROBE;
 
 	pr_err("i2c_hid i2c_hid_init_irq: current IRQF is %lu\n", irqflags);
-    pr_err("i2c_hid i2c_hid_init_irq: client IRQ number is %d\n", clinet->irq);
 
     // forcing the IRQ type (see https://elixir.bootlin.com/linux/v4.0/source/include/linux/irq.h#L39)
     //
