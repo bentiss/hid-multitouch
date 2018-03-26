@@ -803,7 +803,7 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 	struct i2c_hid *ihid = i2c_get_clientdata(client);
 	unsigned long irqflags = IRQF_TRIGGER_NONE;
 	int ret;
-    int forceIrq;
+    // int forceIrq;
 
 	dev_dbg(&client->dev, "Requesting IRQ: %d\n", client->irq);
 
@@ -829,12 +829,15 @@ static int i2c_hid_init_irq(struct i2c_client *client)
     // forceIrq = irq_set_irq_type(client->irq, IRQ_TYPE_EDGE_BOTH);
     // forceIrq = irq_set_irq_type(client->irq, IRQ_TYPE_LEVEL_HIGH);
     // forceIrq = irq_set_irq_type(client->irq, IRQ_TYPE_LEVEL_LOW);
-    forceIrq = irq_set_irq_type(client->irq, IRQ_TYPE_DEFAULT);
+    // forceIrq = irq_set_irq_type(client->irq, IRQ_TYPE_DEFAULT);
 
-    pr_err("i2c_hid i2c_hid_init_irq: forcing IRQ (%d)\n", forceIrq);
+    // pr_err("i2c_hid i2c_hid_init_irq: forcing IRQ (%d)\n", forceIrq);
 
 	ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq,
 				   irqflags | IRQF_ONESHOT, client->name, ihid);
+
+    irq_set_irq_type(client->irq, IRQ_TYPE_EDGE_FALLING);
+
 	if (ret < 0) {
 		dev_warn(&client->dev,
 			"Could not register for %s interrupt, irq = %d,"
