@@ -807,8 +807,11 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 
 	dev_dbg(&client->dev, "Requesting IRQ: %d\n", client->irq);
 
-	if (!irq_get_trigger_type(client->irq))
-		irqflags = IRQF_TRIGGER_LOW;
+	// if (!irq_get_trigger_type(client->irq))
+	// 	irqflags = IRQF_TRIGGER_LOW;
+
+    irqflags = IRQF_TRIGGER_RISING;
+    ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq, irqflags | IRQF_ONESHOT, client->name, ihid);
 
 	// Tryed each value of IRQF_TRIGGER_* without any change noticed (see https://elixir.bootlin.com/linux/latest/source/include/linux/interrupt.h#L31)
 	// irqflags = IRQF_TRIGGER_NONE;
@@ -818,8 +821,8 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 	// irqflags = IRQF_TRIGGER_LOW;
 	// irqflags = IRQF_TRIGGER_PROBE;
 
-	pr_err("i2c_hid i2c_hid_init_irq: current IRQF is %lu\n", irqflags);
-    pr_err("i2c_hid i2c_hid_init_irq: client IRQ number is %d\n", client->irq);
+	// pr_err("i2c_hid i2c_hid_init_irq: current IRQF is %lu\n", irqflags);
+    // pr_err("i2c_hid i2c_hid_init_irq: client IRQ number is %d\n", client->irq);
 
     // forcing the IRQ type (see https://elixir.bootlin.com/linux/v4.0/source/include/linux/irq.h#L39)
     //
@@ -833,10 +836,10 @@ static int i2c_hid_init_irq(struct i2c_client *client)
 
     // pr_err("i2c_hid i2c_hid_init_irq: forcing IRQ (%d)\n", forceIrq);
 
-	ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq,
-				   irqflags | IRQF_ONESHOT, client->name, ihid);
-
-    irq_set_irq_type(client->irq, IRQ_TYPE_EDGE_FALLING);
+	// ret = request_threaded_irq(client->irq, NULL, i2c_hid_irq,
+	// 			   irqflags | IRQF_ONESHOT, client->name, ihid);
+    //
+    // irq_set_irq_type(client->irq, IRQ_TYPE_NONE);
 
 	if (ret < 0) {
 		dev_warn(&client->dev,
